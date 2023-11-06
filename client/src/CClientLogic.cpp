@@ -21,7 +21,7 @@ std::ostream& operator<<(std::ostream& os, const EMessageType& type)
 
 CClientLogic::CClientLogic() : _fileHandler(nullptr), _socketHandler(nullptr), _rsaDecryptor(nullptr)
 {
-	_fileHandler   = new CFileHandler();
+	_fileHandler = new CFileHandler();
 	_socketHandler = new CSocketHandler();
 }
 
@@ -51,16 +51,16 @@ bool CClientLogic::parseServeInfo()
 		_lastError << "Couldn't read " << SERVER_INFO;
 		return false;
 	}
-    if (!parseNetworkInfo(network_info))
-        return false;
+	if (!parseNetworkInfo(network_info))
+		return false;
 
-    std::string name;
-    std::string filePath;
+	std::string name;
+	std::string filePath;
 
-    if (!_fileHandler->readLine(name))
-    {
+	if (!_fileHandler->readLine(name))
+	{
 
-    }
+	}
 	_fileHandler->close();
 
 	return true;
@@ -131,7 +131,7 @@ bool CClientLogic::parseClientInfo()
 		delete _rsaDecryptor;
 		_rsaDecryptor = new RSAPrivateWrapper(decodedKey);
 	}
-	catch(...)
+	catch (...)
 	{
 		clearLastError();
 		_lastError << "Couldn't parse private key from " << CLIENT_INFO;
@@ -143,24 +143,24 @@ bool CClientLogic::parseClientInfo()
 
 bool CClientLogic::parseNetworkInfo(info)
 {
-    CStringer::trim(info);
-    const auto pos = info.find(':');
-    if (pos == std::string::npos)
-    {
-        clearLastError();
-        _lastError << SERVER_INFO << " has invalid format! missing separator ':'";
-        return false;
-    }
-    const auto address = info.substr(0, pos);
-    const auto port = info.substr(pos + 1);
+	CStringer::trim(info);
+	const auto pos = info.find(':');
+	if (pos == std::string::npos)
+	{
+		clearLastError();
+		_lastError << SERVER_INFO << " has invalid format! missing separator ':'";
+		return false;
+	}
+	const auto address = info.substr(0, pos);
+	const auto port = info.substr(pos + 1);
 
-    if (!_socketHandler->setSocketInfo(address, port))
-    {
-        clearLastError();
-        _lastError << SERVER_INFO << " has invalid IP address or port!";
-        return false;
-    }
-    return true;
+	if (!_socketHandler->setSocketInfo(address, port))
+	{
+		clearLastError();
+		_lastError << SERVER_INFO << " has invalid IP address or port!";
+		return false;
+	}
+	return true;
 }
 
 /**
@@ -234,13 +234,21 @@ bool CClientLogic::storeClientInfo()
  */
 bool CClientLogic::validateHeader(const SResponseHeader& header, const EResponseCode expectedCode)
 {
-	if (header.code == RESPONSE_ERROR)
+	// Error validation
+	switch (header.code)
 	{
-		clearLastError();
-		_lastError << "Generic error response code (" << RESPONSE_ERROR << ") received.";
-		return false;
+		case REGISTRATION_RESPONSE_ERROR:
+		{
+			clearLastError();
+			_lastError << "Error response code (" << REGISTRATION_RESPONSE_ERROR << ") received.";
+			return false;
+		}
+		default:
+		{
+			break;  
+		}
 	}
-	
+
 	if (header.code != expectedCode)
 	{
 		clearLastError();
@@ -248,7 +256,7 @@ bool CClientLogic::validateHeader(const SResponseHeader& header, const EResponse
 		return false;
 	}
 
-	csize_t expectedSize = DEF_VAL;
+	//csize_t expectedSize = DEF_VAL;
 	switch (header.code)
 	{
 	case RESPONSE_REGISTRATION:
@@ -278,7 +286,7 @@ bool CClientLogic::validateHeader(const SResponseHeader& header, const EResponse
 		_lastError << "Unexpected payload size " << header.payloadSize << ". Expected size was " << expectedSize;
 		return false;
 	}
-	
+
 	return true;
 }
 
@@ -335,7 +343,7 @@ bool CClientLogic::receiveUnknownPayload(const uint8_t* const request, const siz
 		recSize = size;
 	memcpy(payload, ptr, recSize);
 	ptr = payload + recSize;
-	while(recSize < size)
+	while (recSize < size)
 	{
 		size_t toRead = (size - recSize);
 		if (toRead > PACKET_SIZE)
@@ -353,7 +361,7 @@ bool CClientLogic::receiveUnknownPayload(const uint8_t* const request, const siz
 		recSize += toRead;
 		ptr += toRead;
 	}
-	
+
 	return true;
 }
 
@@ -449,7 +457,7 @@ bool CClientLogic::registerClient(const std::string& username)
 			return false;
 		}
 	}
-
+	/*
 	delete _rsaDecryptor;
 	_rsaDecryptor = new RSAPrivateWrapper();
 	const auto publicKey = _rsaDecryptor->getPublicKey();
@@ -459,11 +467,13 @@ bool CClientLogic::registerClient(const std::string& username)
 		_lastError << "Invalid public key length!";
 		return false;
 	}
+	*/
+
 
 	// fill request data
 	request.header.payloadSize = sizeof(request.payload);
-	strcpy_s(reinterpret_cast<char*>(request.payload.clientName.name), CLIENT_NAME_SIZE, username.c_str());
-	memcpy(request.payload.clientPublicKey.publicKey, publicKey.c_str(), sizeof(request.payload.clientPublicKey.publicKey));
+	strcpy_s(reinterpret_cast<char*>(request.payload.Name.name), CLIENT_NAME_SIZE, username.c_str());
+	//memcpy(request.payload.clientPublicKey.publicKey, publicKey.c_str(), sizeof(request.payload.clientPublicKey.publicKey));
 
 	if (!_socketHandler->sendReceive(reinterpret_cast<const uint8_t* const>(&request), sizeof(request),
 		reinterpret_cast<uint8_t* const>(&response), sizeof(response)))
@@ -478,9 +488,9 @@ bool CClientLogic::registerClient(const std::string& username)
 		return false;  // error message updated within.
 
 	// store received client's ID
-	_self.id        = response.payload;
-	_self.username  = username;
-	_self.publicKey = request.payload.clientPublicKey;
+	_self.id = response.payload;
+	_self.username = username;
+	//_self.publicKey = request.payload.clientPublicKey;
 	if (!storeClientInfo())
 	{
 		clearLastError();
@@ -490,6 +500,52 @@ bool CClientLogic::registerClient(const std::string& username)
 
 	return true;
 }
+bool CClientLogic::storeRSAInfo(const std::string& public_key, const std::string& private_key)
+{
+	if (!_fileHandler->open(PRIVATE_KEY_INFO, true))
+	{
+		clearLastError();
+		_lastError << "Couldn't open " << CLIENT_INFO;
+		return false;
+	}
+	if (!_fileHandler->writeLine(publicKey.c_str()))
+	{
+		clearLastError();
+		_lastError << "Couldn't write client's public key to " << PRIVATE_KEY_INFO;
+		return false;
+	}
+	if (!_fileHandler->write(reinterpret_cast<const uint8_t*>(private_key.c_str()), private_key.size()))
+	{
+		clearLastError();
+		_lastError << "Couldn't write client's private key to " << PRIVATE_KEY_INFO;
+		return false;
+	}
+	_fileHandler->close()
+}
+bool CClientLogic::registerPublicKey(const std::string& username)
+{
+	delete _rsaDecryptor;
+	_rsaDecryptor = new RSAPrivateWrapper();
+	const auto publicKey = _rsaDecryptor->getPublicKey();
+	if (publicKey.size() != PUBLIC_KEY_SIZE)
+	{
+		clearLastError();
+		_lastError << "Invalid public key length!";
+		return false;
+	}
+	const auto privateKey = _rsaDecryptor->getPrivateKey();
+	if(!storeRSAInfo)
+	// Write Base64 encoded private key
+	const auto encodedKey = CStringer::encodeBase64(_rsaDecryptor->getPrivateKey());
+	readInputFromFile(PRIVATE_KEY_INFO, 2);
+	if (!_fileHandler->write(reinterpret_cast<const uint8_t*>(encodedKey.c_str()), encodedKey.size()))
+	{
+		clearLastError();
+		_lastError << "Couldn't write client's private key to " << CLIENT_INFO;
+		return false;
+	}
+	_fileHandler->close();
+}
 
 /**
  * Invoke logic: request client list from server.
@@ -497,8 +553,8 @@ bool CClientLogic::registerClient(const std::string& username)
 bool CClientLogic::requestClientsList()
 {
 	SRequestClientsList request(_self.id);
-	uint8_t* payload   = nullptr;
-	uint8_t* ptr       = nullptr;
+	uint8_t* payload = nullptr;
+	uint8_t* ptr = nullptr;
 	size_t payloadSize = 0;
 	size_t parsedBytes = 0;
 	struct
@@ -506,10 +562,10 @@ bool CClientLogic::requestClientsList()
 		SClientID   clientId;
 		SClientName clientName;
 	}client;
-	
-	if (!receiveUnknownPayload(reinterpret_cast<uint8_t*>(&request), sizeof(request), RESPONSE_USERS,payload, payloadSize))
+
+	if (!receiveUnknownPayload(reinterpret_cast<uint8_t*>(&request), sizeof(request), RESPONSE_USERS, payload, payloadSize))
 		return false;  // description was set within.
-	
+
 	if (payloadSize == 0)
 	{
 		delete[] payload;
@@ -547,7 +603,7 @@ bool CClientLogic::requestClientPublicKey(const std::string& username)
 	SRequestPublicKey  request(_self.id);
 	SResponsePublicKey response;
 	SClient            client;
-	
+
 	// self validation
 	if (username == _self.username)
 	{
@@ -555,7 +611,7 @@ bool CClientLogic::requestClientPublicKey(const std::string& username)
 		_lastError << username << ", your key is stored in the system already.";
 		return false;
 	}
-	
+
 	if (!getClient(username, client))
 	{
 		clearLastError();
@@ -600,8 +656,8 @@ bool CClientLogic::requestClientPublicKey(const std::string& username)
 bool CClientLogic::requestPendingMessages(std::vector<SMessage>& messages)
 {
 	SRequestMessages  request(_self.id);
-	uint8_t*          payload     = nullptr;
-	uint8_t*          ptr         = nullptr;
+	uint8_t* payload = nullptr;
+	uint8_t* ptr = nullptr;
 	size_t            payloadSize = 0;
 	size_t            parsedBytes = 0;
 
@@ -631,14 +687,14 @@ bool CClientLogic::requestPendingMessages(std::vector<SMessage>& messages)
 		SClient      client;
 		SMessage     message;
 		const size_t msgHeaderSize = sizeof(SPendingMessage);
-		const auto   header        = reinterpret_cast<SPendingMessage*>(ptr);
-		const size_t leftover      = payloadSize - parsedBytes;
+		const auto   header = reinterpret_cast<SPendingMessage*>(ptr);
+		const size_t leftover = payloadSize - parsedBytes;
 
 		/***
 		 * Split validation into two expressions in order to not violate memory access by header pointer.
 		 * This is a fatal error. This means the entire payload was not parsed correctly.
 		 * Report error as if the entire payload is corrupt.
-		 */ 
+		 */
 		if ((msgHeaderSize > leftover) || (msgHeaderSize + header->messageSize) > leftover)
 		{
 			delete[] payload;
@@ -647,7 +703,7 @@ bool CClientLogic::requestPendingMessages(std::vector<SMessage>& messages)
 			return false;
 		}
 
-		
+
 		if (getClient(header->clientId, client))
 		{
 			message.username = client.username;
@@ -659,9 +715,9 @@ bool CClientLogic::requestPendingMessages(std::vector<SMessage>& messages)
 			message.username.append(CStringer::hex(header->clientId.uuid, sizeof(header->clientId.uuid)));
 		}
 
-		ptr         += msgHeaderSize;
+		ptr += msgHeaderSize;
 		parsedBytes += msgHeaderSize;
-		
+
 		switch (header->messageType)
 		{
 		case MSG_SYMMETRIC_KEY_REQUEST:
@@ -672,13 +728,13 @@ bool CClientLogic::requestPendingMessages(std::vector<SMessage>& messages)
 			break;
 		}
 		case MSG_SYMMETRIC_KEY_SEND:
-		{				
+		{
 			if (header->messageSize == 0)  // invalid symmetric key
 			{
 				_lastError << "\tMessage ID #" << header->messageId << ": ";
 				_lastError << "Can't decrypt symmetric key. Content length is " << header->messageSize << "." << std::endl;
 				parsedBytes += header->messageSize;
-				ptr         += header->messageSize;
+				ptr += header->messageSize;
 				continue;
 			}
 
@@ -687,15 +743,15 @@ bool CClientLogic::requestPendingMessages(std::vector<SMessage>& messages)
 			{
 				key = _rsaDecryptor->decrypt(ptr, header->messageSize);
 			}
-			catch(...)
+			catch (...)
 			{
 				_lastError << "\tMessage ID #" << header->messageId << ": ";
 				_lastError << "Can't decrypt symmetric key." << std::endl;
 				parsedBytes += header->messageSize;
-				ptr         += header->messageSize;
+				ptr += header->messageSize;
 				continue;
 			}
-				
+
 			const size_t keySize = key.size();
 			if (keySize != SYMMETRIC_KEY_SIZE)  // invalid symmetric key
 			{
@@ -717,7 +773,7 @@ bool CClientLogic::requestPendingMessages(std::vector<SMessage>& messages)
 				}
 			}
 			parsedBytes += header->messageSize;
-			ptr         += header->messageSize;
+			ptr += header->messageSize;
 			break;
 		}
 		case MSG_TEXT:
@@ -763,7 +819,7 @@ bool CClientLogic::requestPendingMessages(std::vector<SMessage>& messages)
 			if (push)
 				messages.push_back(message);
 			parsedBytes += header->messageSize;
-			ptr         += header->messageSize;
+			ptr += header->messageSize;
 			break;
 		}
 		default:
@@ -787,14 +843,14 @@ bool CClientLogic::sendMessage(const std::string& username, const EMessageType t
 	SClient              client; // client to send to
 	SRequestSendMessage  request(_self.id, (type));
 	SResponseMessageSent response;
-	uint8_t*             content = nullptr;
+	uint8_t* content = nullptr;
 	std::map<const EMessageType, const std::string> descriptions = {
 		{MSG_SYMMETRIC_KEY_REQUEST, "symmetric key request"},
 		{MSG_SYMMETRIC_KEY_SEND,    "symmetric key"},
 		{MSG_TEXT,                  "text message"},
 		{MSG_FILE,                  "file"}
 	};
-	
+
 	// self validation.
 	if (username == _self.username)
 	{
@@ -802,7 +858,7 @@ bool CClientLogic::sendMessage(const std::string& username, const EMessageType t
 		_lastError << username << ", you can't send a " << descriptions[type] << " to yourself..";
 		return false;
 	}
-	
+
 	if (!getClient(username, client))
 	{
 		clearLastError();
@@ -877,7 +933,7 @@ bool CClientLogic::sendMessage(const std::string& username, const EMessageType t
 	if (content == nullptr)
 	{
 		msgToSend = reinterpret_cast<uint8_t*>(&request);
-		msgSize   = sizeof(request);
+		msgSize = sizeof(request);
 	}
 	else
 	{
@@ -919,16 +975,16 @@ bool CClientLogic::sendMessage(const std::string& username, const EMessageType t
 
 std::string CCLientLogic::readInputFromFile(const std::string filename, int lineNumber)
 {
-    if (!_fileHandler->open(filename))
-    {
-        clearLastError();
-        _lastError << "Couldn't open " << filename;
-        throw std::runtime_error("File not found");
-    }
-    std::string username;
-    for(int i = 1; i <= lineNumber ;++i)
-    {
-        !_fileHandler->readLine(username);
-    }
-    return username;
+	if (!_fileHandler->open(filename))
+	{
+		clearLastError();
+		_lastError << "Couldn't open " << filename;
+		throw std::runtime_error("File not found");
+	}
+	std::string username;
+	for (int i = 1; i <= lineNumber; ++i)
+	{
+		!_fileHandler->readLine(username);
+	}
+	return username;
 }

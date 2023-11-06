@@ -125,15 +125,20 @@ void CClientMenu::handleUserChoice()
         const std::string username;
         try
         {
-            username = readInputFromFile('me.info', 1);
+            username = readInputFromFile(CLIENT_INFO, 1);
         }
         catch (const std::exception& e)
         {
-            username = readInputFromFile('transfer.info', 2);
+            username = readInputFromFile(SERVER_INFO, 2);
         }
 		success = _clientLogic.registerClient(username);
 		_registered = success;
 		break;
+	}
+	case CMenuOption::EOption::MENU_REGISTER_PUBLIC_KEY:
+	{
+		username = readInputFromFile(CLIENT_INFO, 1);
+		success = _clientLogic.registerPublicKey(username);
 	}
 	case CMenuOption::EOption::MENU_REQ_CLIENT_LIST:
 	{

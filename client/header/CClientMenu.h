@@ -30,6 +30,7 @@ private:
 		enum class EOption
 		{
 			MENU_REGISTER        = 10,
+			MENU_REGISTER_PUBLIC_KEY = 11,
 			MENU_REQ_CLIENT_LIST = 20,
 			MENU_REQ_PUBLIC_KEY  = 30,
 			MENU_REQ_PENDING_MSG = 40,
@@ -72,6 +73,7 @@ private:
 	bool                           _registered;
 	const std::vector<CMenuOption> _menuOptions {
 		{ CMenuOption::EOption::MENU_REGISTER,        false, "Register",                         "Successfully registered on server."},
+		{ CMenuOption::EOption::MENU_REGISTER_PUBLIC_KEY,           true, "Register RSA keys",      "Successfully generated RSA keys."},
 		{ CMenuOption::EOption::MENU_REQ_CLIENT_LIST, true,  "Request for client list",          ""},
 		{ CMenuOption::EOption::MENU_REQ_PUBLIC_KEY,  true,  "Request for public key",           "Public key was retrieved successfully."},
 		{ CMenuOption::EOption::MENU_REQ_PENDING_MSG, true,  "Request for waiting messages",     ""},

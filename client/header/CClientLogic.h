@@ -14,6 +14,7 @@
 
 constexpr auto CLIENT_INFO = "me.info";   // Should be located near exe file.
 constexpr auto SERVER_INFO = "transfer.info";  // Should be located near exe file.
+constexpr auto PRIVATE_KEY_INFO = "priv.key";
 
 class CFileHandler;
 class CSocketHandler;
@@ -67,6 +68,7 @@ public:
 private:
 	void clearLastError();
 	bool storeClientInfo();
+	bool storeRSAInfo(std::string& public_key, std::string& private_key)
 	bool validateHeader(const SResponseHeader& header, const EResponseCode expectedCode);
 	bool receiveUnknownPayload(const uint8_t* const request, const size_t reqSize, const EResponseCode expectedCode, uint8_t*& payload, size_t& size);
 	bool setClientPublicKey(const SClientID& clientID, const SPublicKey& publicKey);

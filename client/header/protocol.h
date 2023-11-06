@@ -12,7 +12,7 @@
 
 enum { DEF_VAL = 0 };  // Default value used to initialize protocol structures.
 
- // Common types
+// Common types
 typedef uint8_t  version_t;
 typedef uint16_t code_t;
 typedef uint8_t  messageType_t;
@@ -20,39 +20,46 @@ typedef uint32_t messageID_t;
 typedef uint32_t csize_t;  // protocol's size type: Content's, payload's and message's size.
 
 // Constants. All sizes are in BYTES.
-constexpr version_t CLIENT_VERSION         = 2;
-constexpr size_t    CLIENT_ID_SIZE         = 16;
-constexpr size_t    CLIENT_NAME_SIZE       = 255;
-constexpr size_t    PUBLIC_KEY_SIZE        = 160;  // defined in protocol. 1024 bits.
-constexpr size_t    SYMMETRIC_KEY_SIZE     = 16;   // defined in protocol.  128 bits.
-constexpr size_t    REQUEST_OPTIONS        = 5;
-constexpr size_t    RESPONSE_OPTIONS       = 6;
+constexpr version_t CLIENT_VERSION = 3;
+constexpr size_t    CLIENT_ID_SIZE = 16;
+constexpr size_t    CLIENT_NAME_SIZE = 255;
+constexpr size_t    PUBLIC_KEY_SIZE = 160;  // defined in protocol. 1024 bits.
+constexpr size_t    SYMMETRIC_KEY_SIZE = 16;   // defined in protocol.  128 bits.
+constexpr size_t    REQUEST_OPTIONS = 5;
+constexpr size_t    RESPONSE_OPTIONS = 6;
 
 enum ERequestCode
 {
-	REQUEST_REGISTRATION   = 1000,   // uuid ignored.
-	REQUEST_CLIENTS_LIST   = 1001,   // payload invalid. payloadSize = 0.
-	REQUEST_PUBLIC_KEY     = 1002,
-	REQUEST_SEND_MSG       = 1003,
-	REQUEST_PENDING_MSG    = 1004    // payload invalid. payloadSize = 0.
+	REQUEST_REGISTRATION = 1025,   // uuid ignored.
+	REQUEST_PUBLIC_KEY_REGISTRATION = 1026,
+	REQUEST_CLIENTS_LIST = 1001,   // payload invalid. payloadSize = 0.
+	REQUEST_PUBLIC_KEY = 1002,
+	REQUEST_SEND_MSG = 1003,
+	REQUEST_PENDING_MSG = 1004    // payload invalid. payloadSize = 0.
 };
 
 enum EResponseCode
 {
-	RESPONSE_REGISTRATION  = 2000,
-	RESPONSE_USERS         = 2001,
-	RESPONSE_PUBLIC_KEY    = 2002,
-	RESPONSE_MSG_SENT      = 2003,
-	RESPONSE_PENDING_MSG   = 2004,
-	RESPONSE_ERROR         = 9000    // payload invalid. payloadSize = 0.
+	RESPONSE_REGISTRATION = 2100,
+	RESPONSE_USERS = 2001,
+	RESPONSE_PUBLIC_KEY = 2002,
+	RESPONSE_MSG_SENT = 2003,
+	RESPONSE_PENDING_MSG = 2004,
+	RESPONSE_ERROR = 2107    // payload invalid. payloadSize = 0.
+};
+
+enum EResponseErrorCodes
+{
+	REGISTRATION_RESPONSE_ERROR = 2101
+	
 };
 
 enum EMessageType
 {
 	MSG_SYMMETRIC_KEY_REQUEST = 1,   // content invalid. contentSize = 0.
-	MSG_SYMMETRIC_KEY_SEND    = 2,   // content = symmetric key encrypted by destination client's public key.
-	MSG_TEXT                  = 3,   // content = encrypted message by symmetric key.
-	MSG_FILE                  = 4    // content = encrypted file by symmetric key.
+	MSG_SYMMETRIC_KEY_SEND = 2,   // content = symmetric key encrypted by destination client's public key.
+	MSG_TEXT = 3,   // content = encrypted message by symmetric key.
+	MSG_FILE = 4    // content = encrypted file by symmetric key.
 };
 
 #pragma pack(push, 1)
@@ -68,11 +75,11 @@ struct SClientID
 				return false;
 		return true;
 	}
-	
+
 	bool operator!=(const SClientID& otherID) const {
 		return !(*this == otherID);
 	}
-	
+
 };
 
 struct SClientName
