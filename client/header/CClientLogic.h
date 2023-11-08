@@ -29,6 +29,7 @@ public:
 		SClientID     id;
 		std::string   username;
 		SPublicKey    publicKey;
+		SSymmetricKey aes_symmetricKey;
 		bool          publicKeySet    = false;
 		SSymmetricKey symmetricKey;
 		bool          symmetricKeySet = false;
@@ -38,6 +39,14 @@ public:
 	{
 		std::string username; // source username
 		std::string content;
+	};
+
+	struct SFile
+	{
+		std::string username; // source username
+		std::string content;
+		std::string filePath;
+		std::string fileName;
 	};
 
 public:
@@ -56,20 +65,23 @@ public:
 	// client logic to be invoked by client menu.
 	bool parseServeInfo();
 	bool parseClientInfo();
-    bool parseNetworkInfo();
+    bool parseNetworkInfo(std::string info);
     std::string readInputFromFile(const std::string filename);
 	std::vector<std::string> getUsernames() const;
 	bool registerClient(const std::string& username);
+	bool registerPublicKey(const std::string& username);
 	bool requestClientsList();
 	bool requestClientPublicKey(const std::string& username);
 	bool requestPendingMessages(std::vector<SMessage>& messages);
 	bool sendMessage(const std::string& username, const EMessageType type, const std::string& data = "");
+	bool sendFile();
 
 private:
 	void clearLastError();
 	bool storeClientInfo();
-	bool storeRSAInfo(std::string& public_key, std::string& private_key)
+	bool storeRSAInfo(std::string& public_key, std::string& private_key);
 	bool validateHeader(const SResponseHeader& header, const EResponseCode expectedCode);
+	bool validateFileName(std::string& fileName);
 	bool receiveUnknownPayload(const uint8_t* const request, const size_t reqSize, const EResponseCode expectedCode, uint8_t*& payload, size_t& size);
 	bool setClientPublicKey(const SClientID& clientID, const SPublicKey& publicKey);
 	bool setClientSymmetricKey(const SClientID& clientID, const SSymmetricKey& symmetricKey);
@@ -77,6 +89,7 @@ private:
 	bool getClient(const SClientID& clientID, SClient& client) const;
 
 	SClient              _self;           // self symmetric key invalid.
+	SFile				_fileToBeSent;
 	std::vector<SClient> _clients;
 	std::stringstream    _lastError;
 	CFileHandler*        _fileHandler;

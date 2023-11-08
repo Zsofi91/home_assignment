@@ -27,6 +27,7 @@ constexpr size_t    PUBLIC_KEY_SIZE = 160;  // defined in protocol. 1024 bits.
 constexpr size_t    SYMMETRIC_KEY_SIZE = 16;   // defined in protocol.  128 bits.
 constexpr size_t    REQUEST_OPTIONS = 5;
 constexpr size_t    RESPONSE_OPTIONS = 6;
+constexpr size_t	FILE_NAME_SIZE = 255;
 
 enum ERequestCode
 {
@@ -34,13 +35,14 @@ enum ERequestCode
 	REQUEST_PUBLIC_KEY_REGISTRATION = 1026,
 	REQUEST_CLIENTS_LIST = 1001,   // payload invalid. payloadSize = 0.
 	REQUEST_PUBLIC_KEY = 1002,
-	REQUEST_SEND_MSG = 1003,
+	REQUEST_SEND_FILE = 1028,
 	REQUEST_PENDING_MSG = 1004    // payload invalid. payloadSize = 0.
 };
 
 enum EResponseCode
 {
 	RESPONSE_REGISTRATION = 2100,
+	RESPONSE_PUBLIC_KEY_REGISTRATION = 2102,
 	RESPONSE_USERS = 2001,
 	RESPONSE_PUBLIC_KEY = 2002,
 	RESPONSE_MSG_SENT = 2003,
@@ -50,8 +52,7 @@ enum EResponseCode
 
 enum EResponseErrorCodes
 {
-	REGISTRATION_RESPONSE_ERROR = 2101
-	
+	REGISTRATION_RESPONSE_ERROR = 2101	
 };
 
 enum EMessageType
@@ -124,7 +125,6 @@ struct SRequestRegistration
 	struct
 	{
 		SClientName Name;
-		//SPublicKey  clientPublicKey;
 	}payload;
 	SRequestRegistration() : header(REQUEST_REGISTRATION) {}
 };
@@ -134,6 +134,38 @@ struct SResponseRegistration
 	SResponseHeader header;
 	SClientID       payload;
 };
+
+struct SRequestPublicKeyRegistration
+{
+	SRequestHeader header;
+	struct
+	{
+		SClientName Name;
+		SPublicKey  clientPublicKey;
+	}payload;
+	SRequestRegistration() : header(REQUEST_PUBLIC_KEY_REGISTRATION) {}
+};
+
+struct SResponsePublicKeyRegistration
+{
+	SResponseHeader header;
+	struct {
+		SClientID       clientId;
+		SSymmetricKey   aes_symmetricKey;
+	} payload;
+	
+};
+
+struct SRequestReconnection
+{
+	SRequestHeader header;
+	struct
+	{
+		SClientName Name;
+	}payload;
+	SRequestRegistration() : header(REQUEST_REGISTRATION) {}
+};
+
 
 struct SRequestClientsList
 {
@@ -164,17 +196,16 @@ struct SResponsePublicKey
 	}payload;
 };
 
-struct SRequestSendMessage
+struct SRequestSendFile
 {
 	SRequestHeader header;
 	struct SPayloadHeader
 	{
-		SClientID           clientId;   // destination client
-		const messageType_t messageType;
+		std::string			fileName;
 		csize_t             contentSize;
-		SPayloadHeader(const messageType_t type) : messageType(type), contentSize(DEF_VAL) {}
+		SPayloadHeader() : fileName(filename), contentSize(DEF_VAL) {}
 	}payloadHeader;
-	SRequestSendMessage(const SClientID& id, const messageType_t type) : header(id, REQUEST_SEND_MSG), payloadHeader(type) {}
+	SRequestSendFile(const std::string filename) : header(id, REQUEST_SEND_FILE), payloadHeader(filename) {}
 };
 
 struct SResponseMessageSent
