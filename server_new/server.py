@@ -52,7 +52,7 @@ class Server:
                 if request_header.code == config.reconnection_request:
                     response_header = protocol.ResponseHeader(config.reconnection_request_rejected)
                     self.write(conn, response_header.pack())
-                    # register client as it would be a new client
+                    # TODO: register client as it would be a new client - only if it failed due to not registered yet
                     registered = self.handle_registration_request(conn, data)
                     if not registered:
                         response_header = protocol.ResponseHeader(config.registration_failed)
@@ -77,8 +77,8 @@ class Server:
             try:
                 conn.send(to_send)
                 sent += len(to_send)
-            except:
-                logging.error("Failed to send response to " + conn)
+            except Exception as err:
+                logging.error(f"Failed to send response to {conn} due to {err}")
                 return False
         logging.info("Response sent successfully.")
         return True
@@ -119,7 +119,7 @@ class Server:
         except:
             logging.error("Registration Request: Failed to connect to database.")
             return False
-        client = database.Client(uuid.uuid4().hex, request.name)
+        client = database.Client(uuid.uuid4().hex, request.name, str(datetime.now()))
         if not self.database.store_client(client):
             logging.error(f"Registration Request: Failed to store client {request.name}.")
             return False
@@ -137,14 +137,14 @@ class Server:
             return False
         try:
             if not self.database.client_username_exists(request.name):
-                logging.info(f"Sending Public Key Request:: Username ({request.name}) already exists.")
+                logging.info(f"Sending Public Key Request:: Username ({request.name}) doesn't exist.")
                 return False
         except:
             logging.error("Sending Public Key Request: Failed to connect to database.")
             return False
         #  update the relevant client with the public key
         try:
-            if not self.database.update_public_key(request.name):
+            if not self.database.update_public_key(request.header.clientID):
                 logging.error("Sending Public Key Request: Failed to update public key in database")
                 return False
         except:
@@ -152,9 +152,9 @@ class Server:
             return False
         # generate aes key
         aes_key = helpers.generate_aes_key()
-        # save aes key to database for relevant client
         try:
-            if not self.database.update_aes_key(request.name):
+            # save aes key to database for relevant client
+            if not self.database.update_aes_key(request.header.clientID):
                 logging.error("Sending Public Key Request: Failed to update aes key in database")
                 return False
         except Exception as e:
@@ -162,14 +162,7 @@ class Server:
             return False
         # encrypt aes key
         encrypted_aes_key = helpers.encrypt_aes_key(aes_key, request.public_key)
-        # retrieving client_id from database
-        try:
-            client_id = self.database.get_client_id(request.name)
-            logging.info(f"Sending Public Key Request: Get client_id for client: {request.name}")
-        except Exception as e:
-            logging.error(f"Sending Public Key Request: Failed to get client_id due to: {e}.")
-            return False
-        response.clientID = client_id
+        response.clientID = request.header.clientID
         response.aes_key = encrypted_aes_key
         response.header.payload_size = config.client_id_size
         return self.write(conn, response.pack())
@@ -191,21 +184,20 @@ class Server:
         # update LastSeen for client
         now = datetime.now()
         try:
-            self.database.update_last_seen(request.name, now)
+            self.database.update_last_seen(request.header.clientID, now)
             logging.info(f"Reconnection Request: updated LastSeen for client: {request.name}")
         except:
             logging.error(f"Reconnection Request: Failed to update LastSeen for client: {request.name}.")
-        # retrieve client_id, public_key and aes_key from database
         try:
-            client_id = self.database.get_client_id(request.name)
-            aes_key = self.database.get_aes_key(request.name)
-            public_key = self.database.get_public_key(request.name)
+            # retrieve public_key and aes_key from db
+            aes_key = self.database.get_aes_key(request.header.clientID)
+            public_key = self.database.get_public_key(request.header.clientID)
         except Exception as e:
             logging.error(f"Reconnection Request: Failed to retrieve client_id and aes_key due to: {e}")
             return False
         # encrypt aes_key
         encrypted_aes_key = helpers.encrypt_aes_key(aes_key, public_key)
-        response.clientID = client_id
+        response.clientID = request.header.clientID
         response.aes_key = encrypted_aes_key
         response.header.payload_size = config.client_id_size
         return self.write(conn, response.pack())
@@ -214,60 +206,31 @@ class Server:
         """ receive a file from a client """
         request = protocol.SendingFileRequest()
         response = protocol.SendingFileResponse()
-
-    # def handleMessageSendRequest(self, conn, data):
-    #     """ store a message from one user to another """
-    #     request = protocol.MessageSendRequest()
-    #     response = protocol.MessageSentResponse()
-    #     if not request.unpack(conn, data):
-    #         logging.error("Send Message Request: Failed to parse request header!")
-    #
-    #     msg = database.Message(request.clientID,
-    #                            request.header.clientID,
-    #                            request.messageType,
-    #                            request.content)
-    #
-    #     msgId = self.database.storeMessage(msg)
-    #     if not msgId:
-    #         logging.error("Send Message Request: Failed to store msg.")
-    #         return False
-    #
-    #     response.header.payloadSize = protocol.CLIENT_ID_SIZE + protocol.MSG_ID_SIZE
-    #     response.clientID = request.clientID
-    #     response.messageID = msgId
-    #     logging.info(f"Message from clientID ({request.header.clientID}) successfully stored.")
-    #     return self.write(conn, response.pack())
-    #
-    # def handlePendingMessagesRequest(self, conn, data):
-    #     """ respond with pending messages """
-    #     request = protocol.RequestHeader()
-    #     response = protocol.ResponseHeader(protocol.EResponseCode.RESPONSE_PENDING_MSG.value)
-    #     if not request.unpack(data):
-    #         logging.error("Pending messages request: Failed to parse request header!")
-    #     try:
-    #         if not self.database.clientIdExists(request.clientID):
-    #             logging.info(f"clientID ({request.clientID}) does not exists!")
-    #             return False
-    #     except:
-    #         logging.error("Pending messages request: Failed to connect to database.")
-    #         return False
-    #
-    #     payload = b""
-    #     messages = self.database.getPendingMessages(request.clientID)
-    #     ids = []
-    #     for msg in messages:  # id, from, type, content
-    #         pending = protocol.PendingMessage()
-    #         pending.messageID = int(msg[0])
-    #         pending.messageClientID = msg[1]
-    #         pending.messageType = int(msg[2])
-    #         pending.content = msg[3]
-    #         pending.messageSize = len(msg[3])
-    #         ids += [pending.messageID]
-    #         payload += pending.pack()
-    #     response.payloadSize = len(payload)
-    #     logging.info(f"Pending messages to clientID ({request.clientID}) successfully extracted.")
-    #     if self.write(conn, response.pack() + payload):
-    #         for msg_id in ids:
-    #             self.database.removeMessage(msg_id)
-    #         return True
-    #     return False
+        if not request.unpack(conn, data):
+            logging.error("Send File Request: Failed to parse request header!")
+        try:
+            # decrypt message content
+            file_content = request.message_content
+            client_id = request.header.clientID
+            aes_key = self.database.get_aes_key(client_id)
+            decrypted_msg_content = helpers.decrypt_file_content(file_content, aes_key)
+            # save file to RAM
+            file_path = helpers.save_to_ram(decrypted_msg_content, request.file_name)
+            # calc cksum
+            cksum = helpers.cksum(decrypted_msg_content)
+            try:
+                # store file details into db
+                verified = False
+                self.database.FILES(client_id, request.file_name, file_path, verified)
+            except Exception as err:
+                logging.error(f"Send File Request: Failed to store file details due to: {err}.")
+                return False
+            response.clientID = client_id
+            response.content_size = request.content_size
+            response.file_name = request.file_name
+            response.cksum = cksum
+            response.header.payload_size = config.client_id_size
+            return self.write(conn, response.pack())
+        except Exception as err:
+            logging.error(f"Send File Request: Failed due to: {err}.")
+            return False

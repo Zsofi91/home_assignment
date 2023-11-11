@@ -5,10 +5,6 @@ import logging
 config = config.Config()
 logging.basicConfig(format='[%(levelname)s - %(asctime)s]: %(message)s', level=logging.INFO, datefmt='%H:%M:%S')
 
-MSG_ID_SIZE = 4
-MSG_TYPE_MAX = 0xFF
-MSG_ID_MAX = 0xFFFFFFFF
-
 
 class RequestHeader:
     def __init__(self):
@@ -19,7 +15,6 @@ class RequestHeader:
         self.size = config.client_id_size + config.header_size
 
     def unpack(self, data):
-        """ Little Endian unpack Request Header """
         try:
             self.clientID = struct.unpack(f"<{config.client_id_size}s", data[:config.client_id_size])[0]
             header_data = data[config.client_id_size:config.client_id_size + config.header_size]
@@ -39,7 +34,6 @@ class ResponseHeader:
         self.size = config.client_id_size + config.header_size
 
     def pack(self):
-        """ Little Endian pack Response Header """
         try:
             return struct.pack("<BHL", self.version, self.code, self.payload_size)
         except:
@@ -52,7 +46,6 @@ class RegistrationRequest:
         self.name = b""
 
     def unpack(self, data):
-        """ Little Endian unpack Request Header and Registration data """
         if not self.header.unpack(data):
             return False
         try:
@@ -70,7 +63,6 @@ class RegistrationResponse:
         self.clientID = b""
 
     def pack(self):
-        """ Little Endian pack Response Header and client ID """
         try:
             data = self.header.pack()
             data += struct.pack(f"<{config.client_id_size}s", self.clientID)
@@ -86,15 +78,13 @@ class SendingPublicKeyRequest:
         self.public_key = b""
 
     def unpack(self, data):
-        """ Little Endian unpack Request Header and Registration data """
         if not self.header.unpack(data):
             return False
         try:
-            # trim the byte array after the nul terminating character.
             name_data = data[self.header.size:self.header.size + config.name_size]
             self.name = str(struct.unpack(f"<{config.name_size}s", name_data)[0].partition(b'\0')[0].decode('utf-8'))
             public_key_data = data[self.header.size + config.name_size:self.header.size + config.name_size +
-                                                               config.public_key_size]
+                                                                       config.public_key_size]
             self.public_key = struct.unpack(f"<{config.public_key_size}s", public_key_data)[0]
             return True
         except:
@@ -110,7 +100,6 @@ class SendingPublicKeyResponse:
         self.aes_key = b""
 
     def pack(self):
-        """ Little Endian pack Response Header and client ID """
         try:
             data = self.header.pack()
             data += struct.pack(f"<{config.client_id_size}s", self.clientID)
@@ -126,7 +115,6 @@ class ReconnectionRequest:
         self.name = b""
 
     def unpack(self, data):
-        """ Little Endian unpack Request Header and Registration data """
         if not self.header.unpack(data):
             return False
         try:
@@ -145,7 +133,6 @@ class ReconnectionResponse:
         self.aes_key = b""
 
     def pack(self):
-        """ Little Endian pack Response Header and client ID """
         try:
             data = self.header.pack()
             data += struct.pack(f"<{config.client_id_size}s", self.clientID)
@@ -158,111 +145,58 @@ class ReconnectionResponse:
 class SendingFileRequest:
     def __init__(self):
         self.header = RequestHeader()
-        self.content_size = b""
+        self.content_size = config.def_val
         self.file_name = b""
         self.message_content = b""
 
-    def unpack(self, data):
-        """ Little Endian unpack Request Header and Registration data """
+    def unpack(self, conn, data):
+        # TODO: double check this code
         packet_size = len(data)
         if not self.header.unpack(data):
             return False
         try:
-            # trim the byte array after the nul terminating character.
             content_size = data[self.header.size:self.header.size + config.content_size]
-            self.content_size = str(struct.unpack(f"<{config.content_size}s", content_size)[0].partition(b'\0')[0].
-                                    decode('utf-8'))
-            # TODO: double check this code
+            self.content_size = struct.unpack(f"<{config.content_size}s", content_size)[0]
             file_name = data[self.header.size + config.content_size:self.header.size + config.content_size +
                                                                config.file_name_size]
             self.file_name = struct.unpack(f"<{config.file_name_size}s", file_name)[0]
-            # TODO: understand message_content
-            self.message_content = ""
+            offset = self.header.size + config.content_size + config.file_name_size
+            bytes_to_read = packet_size - offset
+            if bytes_to_read > self.content_size:
+                bytes_to_read = self.content_size
+            self.message_content = struct.unpack(f"<{bytes_to_read}s", data[offset:offset + bytes_to_read])[0]
+            while bytes_to_read < self.content_size:
+                data = conn.recv(packet_size),
+                data_size = len(data)
+                if (self.content_size - bytes_to_read) < data_size:
+                    data_size = self.content_size - bytes_to_read
+                self.content_size += struct.unpack(f"<{data_size}s", data[:data_size])[0]
+                bytes_to_read += data_size
             return True
         except:
-            self.content_size = b""
+            self.content_size = config.def_val
             self.file_name = b""
             self.message_content = b""
             return False
 
 
 class SendingFileResponse:
-    pass
+    def __init__(self):
+        self.header = ResponseHeader(config.file_received_ok_with_crc)
+        self.clientID = b""
+        self.content_size = config.def_val
+        self.file_name = b""
+        self.cksum = b""
 
+    def pack(self):
+        try:
+            data = self.header.pack()
+            data += struct.pack(f"<{config.client_id_size}s", self.clientID)
+            data += struct.pack(f"<{config.content_size}s", self.content_size)
+            data += struct.pack(f"<{config.cksum_size}s", self.cksum)
+            return data
+        except:
+            return b""
 
-#
-
-# class MessageSendRequest:
-#     def __init__(self):
-#         self.header = RequestHeader()
-#         self.clientID = b""
-#         self.messageType = DEF_VAL
-#         self.contentSize = DEF_VAL
-#         self.content = b""
-#
-#     def unpack(self, conn, data):
-#         """ Little Endian unpack Request Header and message data """
-#         packetSize = len(data)
-#         if not self.header.unpack(data):
-#             return False
-#         try:
-#             clientID = data[self.header.SIZE:self.header.SIZE + CLIENT_ID_SIZE]
-#             self.clientID = struct.unpack(f"<{CLIENT_ID_SIZE}s", clientID)[0]
-#             offset = self.header.SIZE + CLIENT_ID_SIZE
-#             self.messageType, self.contentSize = struct.unpack("<BL", data[offset:offset + 5])
-#             offset = self.header.SIZE + CLIENT_ID_SIZE + 5
-#             bytesRead = packetSize - offset
-#             if bytesRead > self.contentSize:
-#                 bytesRead = self.contentSize
-#             self.content = struct.unpack(f"<{bytesRead}s", data[offset:offset + bytesRead])[0]
-#             while bytesRead < self.contentSize:
-#                 data = conn.recv(packetSize)  # reuse first size of data.
-#                 dataSize = len(data)
-#                 if (self.contentSize - bytesRead) < dataSize:
-#                     dataSize = self.contentSize - bytesRead
-#                 self.content += struct.unpack(f"<{dataSize}s", data[:dataSize])[0]
-#                 bytesRead += dataSize
-#             return True
-#         except:
-#             self.clientID = b""
-#             self.messageType = DEF_VAL
-#             self.contentSize = DEF_VAL
-#             self.content = b""
-#             return False
-# #
-#
-# class MessageSentResponse:
-#     def __init__(self):
-#         self.header = ResponseHeader(EResponseCode.RESPONSE_MSG_SENT.value)
-#         self.clientID = b""
-#         self.messageID = b""
-#
-#     def pack(self):
-#         """ Little Endian pack Response Header and client ID """
-#         try:
-#             data = self.header.pack()
-#             data += struct.pack(f"<{CLIENT_ID_SIZE}sL", self.clientID, self.messageID)
-#             return data
-#         except:
-#             return b""
-#
-#
-# class PendingMessage:
-#     def __init__(self):
-#         self.messageClientID = b""
-#         self.messageID = 0
-#         self.messageType = 0
-#         self.messageSize = 0
-#         self.content = b""
-#
-#     def pack(self):
-#         try:
-#             """ Little Endian pack Response Header and pending message header """
-#             data = struct.pack(f"<{CLIENT_ID_SIZE}s", self.messageClientID)
-#             data += struct.pack("<LBL", self.messageID, self.messageType, self.messageSize)
-#             data += struct.pack(f"<{self.messageSize}s", self.content)
-#             return data
-#         except:
-#             return b""
 
 

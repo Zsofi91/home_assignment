@@ -1,8 +1,12 @@
 import hashlib
-import string
 import secrets
+
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
+import io
+
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 
 def stop_server(err):
@@ -25,8 +29,8 @@ def parse_port(file_path):
 
 def generate_aes_key():
     """ Generating AES key. """
-    key = ''.join(secrets.choice(string.hexdigits) for i in range(32))
-    return bytes.fromhex(key)
+    key = secrets.token_bytes(16)
+    return key
 
 
 def encrypt_aes_key(aes_key, public_key):
@@ -35,19 +39,32 @@ def encrypt_aes_key(aes_key, public_key):
     return encrypted_aes_key
 
 
-# def cksum(filename):
-#     crc32 = 0
-#     byte_count = 0
-#
-#     with open(filename, 'rb') as file:
-#         while True:
-#             chunk = file.read(1024)
-#             if not chunk:
-#                 break
-#             crc32 = hashlib.crc32(chunk, crc32)
-#             byte_count += len(chunk)
-#
-#     crc32 = crc32 & 0xFFFFFFFF  # Ensure the result is a 32-bit unsigned integer
-#     return f'{crc32:08X} {byte_count} {filename}'
+def decrypt_file_content(encrypted_content, aes_key):
+    cipher = Cipher(algorithms.AES(aes_key), modes.CFB(b'\0' * 16), backend=default_backend())
+    decryptor = cipher.decryptor()
+    decrypted_content = decryptor.update(encrypted_content) + decryptor.finalize()
+    return decrypted_content
 
 
+def cksum(file_name):
+    crc32 = 0
+    byte_count = 0
+
+    with open(file_name, 'rb') as file:
+        while True:
+            chunk = file.read(1024)
+            if not chunk:
+                break
+            crc32 = hashlib.crc32(chunk, crc32)
+            byte_count += len(chunk)
+
+    crc32 = crc32 & 0xFFFFFFFF
+    return f'{crc32:08X} {byte_count} {file_name}'
+
+
+def save_to_ram(file_content, file_name):
+    in_memory_file = io.BytesIO(file_content)
+    file_path = f'/tmp/{file_name}'
+    with open(file_path, 'wb') as f:
+        f.write(in_memory_file.read())
+    return file_path

@@ -83,38 +83,37 @@ class Database:
         return self.execute(f"INSERT INTO {Database.CLIENTS} VALUES (?, ?, ?, ?, ?)",
                             [client.ID, client.Name, client.PublicKey, client.LastSeen, client.AESKey], True)
 
-    def update_public_key(self, client_name):
-        """ Set public key given client name """
-        return self.execute(f"UPDATE {Database.CLIENTS} SET PublicKey = ? WHERE Name = ?", [client_name], True)
+    def update_public_key(self, client_id):
+        """ Set public key given client id """
+        return self.execute(f"UPDATE {Database.CLIENTS} SET PublicKey = ? WHERE ID = ?", [client_id], True)
 
-    def update_aes_key(self, client_name):
-        """ Set aes key given client name"""
-        return self.execute(f"UPDATE {Database.CLIENTS} SET AESKey = ? WHERE Name = ?", [client_name], True)
+    def update_aes_key(self, client_id):
+        """ Set aes key given client id"""
+        return self.execute(f"UPDATE {Database.CLIENTS} SET AESKey = ? WHERE ID = ?", [client_id], True)
 
-    def update_last_seen(self, client_name, time):
-        """ Set LastSeen given client name """
-        return self.execute(f"UPDATE {Database.CLIENTS} SET LastSeen = ? WHERE Name = ?", [time, client_name], True)
+    def update_last_seen(self, client_id, time):
+        """ Set LastSeen given client id """
+        return self.execute(f"UPDATE {Database.CLIENTS} SET LastSeen = ? WHERE ID = ?", [time, client_id], True)
 
-    def get_client_id(self, client_name):
-        """ Get client_id given client name """
-        return self.execute(f"SELECT ID FROM {Database.CLIENTS} WHERE Name = ?", [client_name])
+    def get_client_name(self, client_id):
+        """ Get client_name given client id """
+        return self.execute(f"SELECT Name FROM {Database.CLIENTS} WHERE ID = ?", [client_id])
 
-    def get_aes_key(self, client_name):
-        """ Get aes_key given client name """
-        return self.execute(f"SELECT AESKey FROM {Database.CLIENTS} WHERE Name = ?", [client_name])
+    def get_aes_key(self, client_id):
+        """ Get aes_key given client id """
+        return self.execute(f"SELECT AESKey FROM {Database.CLIENTS} WHERE ID = ?", [client_id])
 
-    def get_public_key(self, client_name):
-        """ Get public_key given client name """
-        return self.execute(f"SELECT PublicKey FROM {Database.CLIENTS} WHERE Name = ?", [client_name])
+    def get_public_key(self, client_id):
+        """ Get public_key given client id """
+        return self.execute(f"SELECT PublicKey FROM {Database.CLIENTS} WHERE ID = ?", [client_id])
 
-    # def storeMessage(self, msg):
-    #     """ Store a message into database """
-    #     if not type(msg) is Message or not msg.validate():
-    #         return False
-    #     results = self.execute(
-    #         f"INSERT INTO {Database.MESSAGES}(ToClient, FromClient, Type, Content) VALUES (?, ?, ?, ?)",
-    #         [msg.ToClient, msg.FromClient, msg.Type, msg.Content], True, True)
-    #     return results
+    def store_file_name(self, file):
+        """ Store a file name with path into database """
+        results = self.execute(
+            f"INSERT INTO {Database.MESSAGES}(ToClient, FromClient, Type, Content) VALUES (?, ?, ?, ?)",
+            [msg.ToClient, msg.FromClient, msg.Type, msg.Content], True, True)
+        return results
+
     #
     # def removeMessage(self, msg_id):
     #     """ remove a message by id from database """

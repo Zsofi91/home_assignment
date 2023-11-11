@@ -11,9 +11,8 @@ class Config:
         self.public_key_size = 160
         self.content_size = 4
         self.aes_key_size = 128
-        self.msg_id_size = ''
         self.file_name_size = 255
-        self.path_name_size = ''
+        self.cksum_size = 4
 
         self.registration_request = 1025
         self.sending_public_key = 1026
@@ -26,13 +25,13 @@ class Config:
         self.successful_registration = 2100
         self.registration_failed = 2101
         self.exchanging_keys = 2102
+        self.file_received_ok_with_crc = 2103
         self.confirm_reconnect_request_send_aes_encrypted = 2105
 
         self.reconnection_request_rejected = 2106
         self.general_error_response = 2107
 
 
-        self.file_received_ok_with_crc = 2103
         self.confirm_received_message = 2104
 
 
