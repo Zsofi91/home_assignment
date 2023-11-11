@@ -199,4 +199,33 @@ class SendingFileResponse:
             return b""
 
 
+class ValidCRCRequest:
+    def __init__(self):
+        self.header = RequestHeader()
+        self.file_name = b""
 
+    def unpack(self, data):
+        if not self.header.unpack(data):
+            return False
+        try:
+            file_name_data = data[self.header.size:self.header.size + config.file_name_size]
+            self.file_name = str(struct.unpack(f"<{config.file_name_size}s", file_name_data)[0].partition(b'\0')[0].
+                                 decode('utf-8'))
+            return True
+        except:
+            self.file_name = b""
+            return False
+
+
+class CRCResponse:
+    def __init__(self):
+        self.header = ResponseHeader(config.confirm_crc_msg_received)
+        self.clientID = b""
+
+    def pack(self):
+        try:
+            data = self.header.pack()
+            data += struct.pack(f"<{config.client_id_size}s", self.clientID)
+            return data
+        except:
+            return b""

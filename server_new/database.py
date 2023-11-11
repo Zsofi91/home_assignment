@@ -2,7 +2,7 @@ import logging
 import sqlite3
 import config
 from client import Client
-from message import Message
+from files import File
 
 config = config.Config()
 
@@ -28,7 +28,7 @@ class Database:
             logging.exception(f"Couldn't create Clients and Files tables due to: {e}")
         conn.close()
 
-    def execute(self, query, args, commit=False, get_last_row=False):
+    def execute(self, query, args, commit=False):
         """ Given a query and args, execute query, and return the results. """
         results = None
         conn = self.connect()
@@ -40,11 +40,9 @@ class Database:
                 results = True
             else:
                 results = cur.fetchall()
-            # if get_last_row:
-            #     results = cur.lastrowid
         except Exception as e:
             logging.exception(f'database execute: {e}')
-        conn.close()  # commit is not required.
+        conn.close()
         return results
 
     def initialize(self):
@@ -107,13 +105,18 @@ class Database:
         """ Get public_key given client id """
         return self.execute(f"SELECT PublicKey FROM {Database.CLIENTS} WHERE ID = ?", [client_id])
 
-    def store_file_name(self, file):
-        """ Store a file name with path into database """
+    def file_details(self, file):
+        """ Store file details  into database """
+        if not type(file) is File or not file.validate():
+            return False
         results = self.execute(
-            f"INSERT INTO {Database.MESSAGES}(ToClient, FromClient, Type, Content) VALUES (?, ?, ?, ?)",
-            [msg.ToClient, msg.FromClient, msg.Type, msg.Content], True, True)
+            f"INSERT INTO {Database.FILES} VALUES (?, ?, ?, ?)", [file.ID, file.FileName, file.PathName, file.Verified], True)
         return results
 
+
+    def update_verified_true(self, client_id):
+        """ Set Verified to true given client id """
+        return self.execute(f"UPDATE {Database.CLIENTS} SET Verified = ? WHERE ID = ?", [True, client_id], True)
     #
     # def removeMessage(self, msg_id):
     #     """ remove a message by id from database """
