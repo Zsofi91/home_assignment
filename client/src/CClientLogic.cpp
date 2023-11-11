@@ -171,7 +171,7 @@ bool CClientLogic::parseClientInfo()
 	return true;
 }
 
-bool CClientLogic::parseNetworkInfo(info)
+bool CClientLogic::parseNetworkInfo(std::string info)
 {
 	CStringer::trim(info);
 	const auto pos = info.find(':');
@@ -427,7 +427,7 @@ bool CClientLogic::setClientSymmetricKey(const SClientID& clientID, const SSymme
 	{
 		if (client.id == clientID)
 		{
-			client.symmetricKey = symmetricKey;
+			client.aes_symmetricKey = symmetricKey;
 			client.symmetricKeySet = true;
 			return true;
 		}
@@ -493,17 +493,7 @@ bool CClientLogic::registerClient(const std::string& username)
 			return false;
 		}
 	}
-	
-	/*delete _rsaDecryptor;
-	_rsaDecryptor = new RSAPrivateWrapper();
-	const auto publicKey = _rsaDecryptor->getPublicKey();
-	if (publicKey.size() != PUBLIC_KEY_SIZE)
-	{
-		clearLastError();
-		_lastError << "Invalid public key length!";
-		return false;
-	}*/
-	
+		
 	// fill request data
 	request.header.payloadSize = sizeof(request.payload);
 	strcpy_s(reinterpret_cast<char*>(request.payload.Name.name), CLIENT_NAME_SIZE, username.c_str());
@@ -531,8 +521,32 @@ bool CClientLogic::registerClient(const std::string& username)
 		_lastError << "Failed writing client info to " << CLIENT_INFO << ". Please register again with different username.";
 		return false;
 	}
-
 	return true;
+}
+bool CClientLogic::reconnectClient(const std::string& username)
+{
+	SRequestReconnect request;
+	SResponseReconnect response;
+
+	request.header.payloadSize = sizeof(request.payload);
+	strcpy_s(reinterpret_cast<char*>(request.payload.Name.name), CLIENT_NAME_SIZE, username.c_str());
+
+	if (!_socketHandler->sendReceive(reinterpret_cast<const uint8_t* const>(&request), sizeof(request),
+		reinterpret_cast<uint8_t* const>(&response), sizeof(response)))
+	{
+		clearLastError();
+		_lastError << "Failed communicating with server on " << _socketHandler;
+		return false;
+	}
+
+	if (!validateHeader(response.header, RESPONSE_RECONNECTION))
+		return false;  // error message updated within.
+
+	// store the decrypted AES key using the priv.key file
+	_self.aes_symmetricKey = response.payload.aes_symmetricKey;
+	_self.aes_symmetricKeySet = true;
+	return true;
+
 }
 bool CClientLogic::storeRSAInfo(const std::string& public_key, const std::string& private_key)
 {
@@ -554,74 +568,52 @@ bool CClientLogic::storeRSAInfo(const std::string& public_key, const std::string
 	_fileHandler->close();
 	return false;
 }
-bool CClientLogic::registerPublicKey(const std::string& username)
+bool CClientLogic::registerPublicKey()
 {
-	if (_fileHandler->open(CLIENT_INFO))
+	SRequestPublicKeyRegistration request;
+	SResponsePublicKeyRegistration response;
+
+	delete _rsaDecryptor;
+	_rsaDecryptor = new RSAPrivateWrapper();
+	const auto publicKey = _rsaDecryptor->getPublicKey();
+	if (publicKey.size() != PUBLIC_KEY_SIZE)
 	{
-		SRequestReconnection request;
-		SResponsePublicKeyRegistration response;
-
-		request.header.payloadSize = sizeof(request.payload);
-		strcpy_s(reinterpret_cast<char*>(request.payload.Name.name), CLIENT_NAME_SIZE, username.c_str());
-		if (!_socketHandler->sendReceive(reinterpret_cast<const uint8_t* const>(&request), sizeof(request),
-			reinterpret_cast<uint8_t* const>(&response), sizeof(response)))
-		{
-			clearLastError();
-			_lastError << "Failed communicating with server on " << _socketHandler;
-			return false;
-		}
-		if (!validateHeader(response.header, RESPONSE_PUBLIC_KEY_REGISTRATION))
-			return false;  // error message updated within.
-		// store the AES key
-
-		_self.symmetricKey = response.payload.aes_symmetricKey
+		clearLastError();
+		_lastError << "Invalid public key length!";
+		return false;
 	}
-	else 
+	const auto privateKey = _rsaDecryptor->getPrivateKey();
+	if (storeRSAInfo) // If you had to create a new file, write the encrypted key to me.info
 	{
-		SRequestPublicKeyRegistration request;
-		SResponsePublicKeyRegistration response;
-
-		delete _rsaDecryptor;
-		_rsaDecryptor = new RSAPrivateWrapper();
-		const auto publicKey = _rsaDecryptor->getPublicKey();
-		if (publicKey.size() != PUBLIC_KEY_SIZE)
+		// Write Base64 encoded private key
+		const auto encodedKey = CStringer::encodeBase64(_rsaDecryptor->getPrivateKey());
+		readInputFromFile(CLIENT_INFO, 2);
+		if (!_fileHandler->write(reinterpret_cast<const uint8_t*>(encodedKey.c_str()), encodedKey.size()))
 		{
 			clearLastError();
-			_lastError << "Invalid public key length!";
+			_lastError << "Couldn't write client's private key to " << CLIENT_INFO;
 			return false;
 		}
-		const auto privateKey = _rsaDecryptor->getPrivateKey();
-		if (storeRSAInfo) // If you had to create a new file, write the encrypted key to me.info
-		{
-			// Write Base64 encoded private key
-			const auto encodedKey = CStringer::encodeBase64(_rsaDecryptor->getPrivateKey());
-			readInputFromFile(CLIENT_INFO, 2);
-			if (!_fileHandler->write(reinterpret_cast<const uint8_t*>(encodedKey.c_str()), encodedKey.size()))
-			{
-				clearLastError();
-				_lastError << "Couldn't write client's private key to " << CLIENT_INFO;
-				return false;
-			}
-			_fileHandler->close();
-		}
-
-		request.header.payloadSize = sizeof(request.payload);
-		memcpy(request.payload.clientPublicKey.publicKey, publicKey.c_str(), sizeof(request.payload.clientPublicKey.publicKey));
-		strcpy_s(reinterpret_cast<char*>(request.payload.Name.name), CLIENT_NAME_SIZE, username.c_str());
-		if (!_socketHandler->sendReceive(reinterpret_cast<const uint8_t* const>(&request), sizeof(request),
-			reinterpret_cast<uint8_t* const>(&response), sizeof(response)))
-		{
-			clearLastError();
-			_lastError << "Failed communicating with server on " << _socketHandler;
-			return false;
-		}
-		if (!validateHeader(response.header, RESPONSE_PUBLIC_KEY_REGISTRATION))
-			return false;  // error message updated within.
-
-		// store the AES key
-		_self.symmetricKey = response.payload.aes_symmetricKey
+		_fileHandler->close();
 	}
 
+	request.header.payloadSize = sizeof(request.payload);
+	memcpy(request.payload.clientPublicKey.publicKey, publicKey.c_str(), sizeof(request.payload.clientPublicKey.publicKey));
+	strcpy_s(reinterpret_cast<char*>(request.payload.Name.name), CLIENT_NAME_SIZE, username.c_str());
+	if (!_socketHandler->sendReceive(reinterpret_cast<const uint8_t* const>(&request), sizeof(request),
+		reinterpret_cast<uint8_t* const>(&response), sizeof(response)))
+	{
+		clearLastError();
+		_lastError << "Failed communicating with server on " << _socketHandler;
+		return false;
+	}
+	if (!validateHeader(response.header, RESPONSE_PUBLIC_KEY_REGISTRATION))
+		return false;  // error message updated within.
+
+	// store the AES key
+	_self.aes_symmetricKey = _rsaDecryptor->decrypt(response.payload.aes_symmetricKey, sizeof(response.payload.aes_symmetricKey));
+	_self.aes_symmetricKeySet = true;
+	return true;
 }
 
 bool CClientLogic::sendFile()
@@ -629,31 +621,26 @@ bool CClientLogic::sendFile()
 	SRequestSendFile  request(_self.id);
 	SResponseFileSent response;
 	uint8_t* content = nullptr;
-	std::map<const EMessageType, const std::string> descriptions = {
-		{MSG_SYMMETRIC_KEY_REQUEST, "symmetric key request"},
-		{MSG_SYMMETRIC_KEY_SEND,    "symmetric key"},
-		{MSG_TEXT,                  "text message"},
-		{MSG_FILE,                  "file"}
-	};
 	
-	// Common Logic for MSG_TEXT, MSG_FILE
 	if (_fileToBeSent.bytes == 0)
 	{
 		clearLastError();
 		_lastError << "Empty input was provided!";
 		return false;
 	}
-	if (!_self.symmetricKey)
+	if (!_self.aes_symmetricKeySet)
 	{
 		clearLastError();
-		_lastError << "Couldn't find " << client.username << "'s symmetric key.";
+		_lastError << "Couldn't find " << client.username << "'s aes key.";
 		return false;
 	}
 
 	strcpy_s(reinterpret_cast<char*>(request.payloadHeader.fileName.name), CLIENT_NAME_SIZE, _fileToBeSent.fileName.c_str());
 	_fileToBeSent.checksum = checksumFromFile(_fileToBeSent.filePath);
-	AESWrapper aes(_self.symmetricKey);
+
+	AESWrapper aes(_self.aes_symmetricKey);
 	const std::string encrypted = aes.encrypt(_fileToBeSent.filecontent, _fileToBeSent.bytes);
+
 	request.payloadHeader.contentSize = encrypted.size();
 	content = new uint8_t[request.payloadHeader.contentSize];
 	memcpy(content, encrypted.c_str(), request.payloadHeader.contentSize);
@@ -687,12 +674,10 @@ bool CClientLogic::sendFile()
 	}
 
 	delete[] content;
-	/*if (msgToSend != reinterpret_cast<uint8_t*>(&request))  // check if msgToSend was allocated by current code.
-		delete[] msgToSend;*/
 
-	// Validate SResponseMessageSent header
 	if (!validateHeader(response.header, RESPONSE_FILE_SENT))
 		return false;  // error message updated within.
+
 	++_fileToBeSent.retryAttempts;
 	_fileToBeSent.shouldResend = ! (_fileToBeSent.checksum == response.payload.checksum);
 
@@ -814,7 +799,6 @@ bool CClientLogic::requestClientsList()
 	return true;
 }
 
-
 /**
  * Invoke logic: request client public key from server.
  */
@@ -870,330 +854,7 @@ bool CClientLogic::requestClientPublicKey(const std::string& username)
 }
 
 
-/**
- * Invoke logic: request pending messages from server.
- */
-bool CClientLogic::requestPendingMessages(std::vector<SMessage>& messages)
-{
-	SRequestMessages  request(_self.id);
-	uint8_t* payload = nullptr;
-	uint8_t* ptr = nullptr;
-	size_t            payloadSize = 0;
-	size_t            parsedBytes = 0;
-
-	messages.clear();
-	if (!receiveUnknownPayload(reinterpret_cast<uint8_t*>(&request), sizeof(request), RESPONSE_PENDING_MSG, payload, payloadSize))
-		return false;  // description was set within.
-
-	if (payloadSize == 0)
-	{
-		delete[] payload;
-		clearLastError();
-		_lastError << "There are no pending messages for you";
-		return false;
-	}
-	if (payload == nullptr || payloadSize < sizeof(SPendingMessage))
-	{
-		delete[] payload;
-		clearLastError();
-		_lastError << "Unexpected payload";
-		return false;
-	}
-
-	clearLastError();
-	ptr = payload;
-	while (parsedBytes < payloadSize)
-	{
-		SClient      client;
-		SMessage     message;
-		const size_t msgHeaderSize = sizeof(SPendingMessage);
-		const auto   header = reinterpret_cast<SPendingMessage*>(ptr);
-		const size_t leftover = payloadSize - parsedBytes;
-
-		/***
-		 * Split validation into two expressions in order to not violate memory access by header pointer.
-		 * This is a fatal error. This means the entire payload was not parsed correctly.
-		 * Report error as if the entire payload is corrupt.
-		 */
-		if ((msgHeaderSize > leftover) || (msgHeaderSize + header->messageSize) > leftover)
-		{
-			delete[] payload;
-			clearLastError();
-			_lastError << "Payload is corrupt and ignored. (Invalid Message Header length).";
-			return false;
-		}
-
-
-		if (getClient(header->clientId, client))
-		{
-			message.username = client.username;
-		}
-		else
-		{
-			// unknown clientID. yet allow receiving messages from unknown clients.
-			message.username = "Unknown client ID: ";
-			message.username.append(CStringer::hex(header->clientId.uuid, sizeof(header->clientId.uuid)));
-		}
-
-		ptr += msgHeaderSize;
-		parsedBytes += msgHeaderSize;
-
-		switch (header->messageType)
-		{
-		case MSG_SYMMETRIC_KEY_REQUEST:
-		{
-			// Message content size should be 0. There is no special parsing logic
-			message.content = "Request for symmetric key.";
-			messages.push_back(message);
-			break;
-		}
-		case MSG_SYMMETRIC_KEY_SEND:
-		{
-			if (header->messageSize == 0)  // invalid symmetric key
-			{
-				_lastError << "\tMessage ID #" << header->messageId << ": ";
-				_lastError << "Can't decrypt symmetric key. Content length is " << header->messageSize << "." << std::endl;
-				parsedBytes += header->messageSize;
-				ptr += header->messageSize;
-				continue;
-			}
-
-			std::string key;
-			try
-			{
-				key = _rsaDecryptor->decrypt(ptr, header->messageSize);
-			}
-			catch (...)
-			{
-				_lastError << "\tMessage ID #" << header->messageId << ": ";
-				_lastError << "Can't decrypt symmetric key." << std::endl;
-				parsedBytes += header->messageSize;
-				ptr += header->messageSize;
-				continue;
-			}
-
-			const size_t keySize = key.size();
-			if (keySize != SYMMETRIC_KEY_SIZE)  // invalid symmetric key
-			{
-				_lastError << "\tMessage ID #" << header->messageId << ": ";
-				_lastError << "Invalid symmetric key size (" << keySize << ")." << std::endl;
-			}
-			else
-			{
-				memcpy(client.symmetricKey.symmetricKey, key.c_str(), keySize);
-				if (setClientSymmetricKey(header->clientId, client.symmetricKey))
-				{
-					message.content = "symmetric key received";
-					messages.push_back(message);
-				}
-				else
-				{
-					_lastError << "\tMessage ID #" << header->messageId << ": ";
-					_lastError << "Couldn't set symmetric key of user: " << message.username << std::endl;
-				}
-			}
-			parsedBytes += header->messageSize;
-			ptr += header->messageSize;
-			break;
-		}
-		case MSG_TEXT:
-		case MSG_FILE:
-		{
-			if (header->messageSize == 0)
-			{
-				_lastError << "\tMessage ID #" << header->messageId << ": ";
-				_lastError << "Message with no content provided." << std::endl;
-				parsedBytes += header->messageSize;
-				ptr += header->messageSize;
-				continue;
-			}
-			message.content = "can't decrypt message"; // assume failure
-			bool push = true;  // push to msg queue
-			if (client.symmetricKeySet)
-			{
-				AESWrapper aes(client.symmetricKey);
-				std::string data;
-				try
-				{
-					data = aes.decrypt(ptr, header->messageSize);
-				}
-				catch (...) {}  // do nothing. failure already assumed.
-				if (header->messageType == MSG_FILE)
-				{
-					// Set filename with timestamp.
-					std::stringstream filepath;
-					filepath << _fileHandler->getTempFolder() << "\\MessageU\\" << message.username << "_" << CStringer::getTimestamp();
-					message.content = filepath.str();
-					if (!_fileHandler->writeAtOnce(message.content, data))
-					{
-						_lastError << "\tMessage ID #" << header->messageId << ": ";
-						_lastError << "Failed to save file on disk." << std::endl;
-						push = false;
-					}
-				}
-				else  // MSG_TEXT
-				{
-					message.content = data;
-				}
-			}
-			if (push)
-				messages.push_back(message);
-			parsedBytes += header->messageSize;
-			ptr += header->messageSize;
-			break;
-		}
-		default:
-		{
-			message.content = ""; // Corrupted message. Don't store.
-			break;
-		}
-		}
-
-	}
-	delete[] payload;
-
-	return true;
-}
-
-/**
- * Send a message to another client via the server.
- */
-bool CClientLogic::sendMessage(const std::string& username, const EMessageType type, const std::string& data)
-{
-	SClient              client; // client to send to
-	SRequestSendMessage  request(_self.id, (type));
-	SResponseMessageSent response;
-	uint8_t* content = nullptr;
-	std::map<const EMessageType, const std::string> descriptions = {
-		{MSG_SYMMETRIC_KEY_REQUEST, "symmetric key request"},
-		{MSG_SYMMETRIC_KEY_SEND,    "symmetric key"},
-		{MSG_TEXT,                  "text message"},
-		{MSG_FILE,                  "file"}
-	};
-
-	// self validation.
-	if (username == _self.username)
-	{
-		clearLastError();
-		_lastError << username << ", you can't send a " << descriptions[type] << " to yourself..";
-		return false;
-	}
-
-	if (!getClient(username, client))
-	{
-		clearLastError();
-		_lastError << "username '" << username << "' doesn't exist. Please check your input or try to request users list again.";
-		return false;
-	}
-	request.payloadHeader.clientId = client.id;
-
-	if (type == MSG_SYMMETRIC_KEY_SEND)
-	{
-		if (!client.publicKeySet)
-		{
-			clearLastError();
-			_lastError << "Couldn't find " << client.username << "'s public key.";
-			return false;
-		}
-
-		AESWrapper    aes;
-		SSymmetricKey symKey;
-		symKey = aes.getKey();
-		if (!setClientSymmetricKey(request.payloadHeader.clientId, symKey))
-		{
-			clearLastError();
-			_lastError << "Failed storing symmetric key of clientID "
-				<< CStringer::hex(request.payloadHeader.clientId.uuid, sizeof(request.payloadHeader.clientId.uuid))
-				<< ". Please try to request clients list again..";
-			return false;
-		}
-
-		RSAPublicWrapper rsa(client.publicKey);
-		const std::string encryptedKey = rsa.encrypt(symKey.symmetricKey, sizeof(symKey.symmetricKey));
-		request.payloadHeader.contentSize = encryptedKey.size();  // 128
-		content = new uint8_t[request.payloadHeader.contentSize];
-		memcpy(content, encryptedKey.c_str(), request.payloadHeader.contentSize);
-	}
-	else if (type == MSG_TEXT || type == MSG_FILE)
-	{
-		// Common Logic for MSG_TEXT, MSG_FILE
-		if (data.empty())
-		{
-			clearLastError();
-			_lastError << "Empty input was provided!";
-			return false;
-		}
-		if (!client.symmetricKeySet)
-		{
-			clearLastError();
-			_lastError << "Couldn't find " << client.username << "'s symmetric key.";
-			return false;
-		}
-
-		uint8_t* file = nullptr;
-		size_t bytes;
-		if ((type == MSG_FILE) && !_fileHandler->readAtOnce(data, file, bytes))  // data = filename
-		{
-			clearLastError();
-			_lastError << "file not found";
-			return false;
-		}
-		AESWrapper aes(client.symmetricKey);
-		const std::string encrypted = (type == MSG_TEXT) ? aes.encrypt(data) : aes.encrypt(file, bytes);
-		request.payloadHeader.contentSize = encrypted.size();
-		content = new uint8_t[request.payloadHeader.contentSize];
-		memcpy(content, encrypted.c_str(), request.payloadHeader.contentSize);
-		delete[] file;
-	}
-
-	// prepare message to send
-	size_t msgSize;
-	uint8_t* msgToSend;
-	request.header.payloadSize = sizeof(request.payloadHeader) + request.payloadHeader.contentSize;
-	if (content == nullptr)
-	{
-		msgToSend = reinterpret_cast<uint8_t*>(&request);
-		msgSize = sizeof(request);
-	}
-	else
-	{
-		msgToSend = new uint8_t[sizeof(request) + request.payloadHeader.contentSize];
-		memcpy(msgToSend, &request, sizeof(request));
-		memcpy(msgToSend + sizeof(request), content, request.payloadHeader.contentSize);
-		msgSize = sizeof(request) + request.payloadHeader.contentSize;
-	}
-
-	// send request and receive response
-	if (!_socketHandler->sendReceive(msgToSend, msgSize, reinterpret_cast<uint8_t* const>(&response), sizeof(response)))
-	{
-		delete[] content;
-		if (msgToSend != reinterpret_cast<uint8_t*>(&request))
-			delete[] msgToSend;
-		clearLastError();
-		_lastError << "Failed communicating with server on " << _socketHandler;
-		return false;
-	}
-
-	delete[] content;
-	if (msgToSend != reinterpret_cast<uint8_t*>(&request))  // check if msgToSend was allocated by current code.
-		delete[] msgToSend;
-
-	// Validate SResponseMessageSent header
-	if (!validateHeader(response.header, RESPONSE_MSG_SENT))
-		return false;  // error message updated within.
-
-	// Validate destination clientID
-	if (request.payloadHeader.clientId != response.payload.clientId)
-	{
-		clearLastError();
-		_lastError << "Unexpected clientID was received.";
-		return false;
-	}
-
-	return true;
-}
-
-std::string CCLientLogic::readInputFromFile(const std::string filename, int lineNumber)
+std::string CClientLogic::readInputFromFile(const std::string filename, int lineNumber)
 {
 	if (!_fileHandler->open(filename))
 	{

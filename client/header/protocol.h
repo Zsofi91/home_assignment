@@ -35,11 +35,13 @@ enum ERequestCode
 	REQUEST_PUBLIC_KEY_REGISTRATION = 1026,
 	REQUEST_CLIENTS_LIST = 1001,   // payload invalid. payloadSize = 0.
 	REQUEST_PUBLIC_KEY = 1002,
+	REQUEST_RECONNECTION = 1027,
 	REQUEST_INVALID_CRC = 1030,
 	REQUEST_SEND_FILE = 1028,
 	REQUEST_PENDING_MSG = 1004, // payload invalid. payloadSize = 0.
 	REQUEST_VALID_CRC = 1029,
-	REQUEST_NACK_CRC = 1031
+	REQUEST_NACK_CRC = 1031,
+	
 };
 
 enum EResponseCode
@@ -50,7 +52,8 @@ enum EResponseCode
 	RESPONSE_PUBLIC_KEY = 2002,
 	RESPONSE_FILE_SENT = 2103,
 	RESPONSE_PENDING_MSG = 2004,
-	RESPONSE_ACK = 2104
+	RESPONSE_ACK = 2104,
+	RESPONSE_RECONNECTION = 2105
 };
 
 enum EResponseErrorCodes
@@ -147,6 +150,25 @@ struct SResponseRegistration
 	SClientID       payload;
 };
 
+struct SRequestReconnect
+{
+	SRequestHeader header;
+	struct
+	{
+		SClientName Name;
+	}payload;
+	SRequestReconnect() : header(REQUEST_RECONNECTION) {}
+};
+
+struct SResponseReconnect
+{
+	SResponseHeader header;
+	struct {
+		SClientID       clientId;
+		SSymmetricKey   aes_symmetricKey;
+	} payload;
+};
+
 struct SRequestAbortCommunication
 {
 	SRequestHeader header;
@@ -179,7 +201,7 @@ struct SRequestValidCRC
 
 struct SResponseGeneric
 {
-	SResponseHeader header(RESPONSE_ACK);
+	SResponseHeader header;
 	SClientID       payload;
 };
 

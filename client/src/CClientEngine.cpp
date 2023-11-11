@@ -1,19 +1,11 @@
-/**
- * MessageU Client
- * @file CClientMenu.cpp
- * @brief Interface class for user input. Handle user's requests.
- * can be replaced by GUI class and invoke CClientLogic correspondingly.
- * @author Roman Koifman
- * https://github.com/Romansko/MessageU/blob/main/client/src/CClientMenu.cpp
- */
-#include "CClientMenu.h"
+#include "CClientEngine.h"
 #include <iostream>
 #include <boost/algorithm/string/trim.hpp>
 
 /**
  * Print error and exit client.
  */
-void CClientMenu::clientStop(const std::string& error) const
+void CClientEngine::clientStop(const std::string& error) const
 {
 	std::cout << "Fatal Error: " << error << std::endl << "Client will stop." << std::endl;
 	pause();
@@ -21,9 +13,9 @@ void CClientMenu::clientStop(const std::string& error) const
 }
 
 /**
- * Initialize client's menu & its internals.
+ * Initialize client's engine & its internals.
  */
-void CClientMenu::initialize()
+void CClientEngine::initialize()
 {
 	if (!_clientLogic.parseServeInfo())
 	{
@@ -34,77 +26,44 @@ void CClientMenu::initialize()
 }
 
 /**
- * Print main menu to the screen.
+ * Print main message to the screen.
  */
-void CClientMenu::display() const
+void CClientEngine::display() const
 {
 	clear();
 	if (_registered && !_clientLogic.getSelfUsername().empty())
 		std::cout << "Hello " << _clientLogic.getSelfUsername() << ", ";
-	std::cout << "MessageU client at your service." << std::endl << std::endl;
-	for (const auto& opt : _menuOptions)
-		std::cout << opt << std::endl;
 }
-
-
-/**
- * Read input from console.
- * Do not allow empty lines.
- */
-std::string CClientMenu::readUserInput(const std::string& description) const
-{
-	std::string input;
-	std::cout << description << std::endl;
-	do
-	{
-		std::getline(std::cin, input);
-		boost::algorithm::trim(input);
-		if (std::cin.eof())   // ignore ctrl + z.
-			std::cin.clear();
-	} while (input.empty());
-
-	return input;
-}
-
-
-/**
- * Read & Validate user's input according to main menu options.
- * If valid option, assign menuOption.
- */
-bool CClientMenu::getMenuOption(CMenuOption& menuOption) const
-{
-	const std::string input = readUserInput();
-	const auto it = std::find_if(_menuOptions.begin(), _menuOptions.end(),
-		[&input](auto& opt) { return (input == std::to_string(static_cast<uint32_t>(opt.getValue()))); });
-	if (it == _menuOptions.end())
-	{
-		return false; // menuOption invalid.
-	}
-	menuOption = *it;
-	return true;
-}
-
 
 /**
  * Invoke matching function to user's choice. User's choice is validated.
  */
-void CClientMenu::handleUserChoice()
+void CClientEngine::startFlow()
 {
-	CMenuOption menuOption;
-	bool success = getMenuOption(menuOption);
-	while (!success)
+	const std::string username;
+	if (!_registered)
 	{
-		std::cout << "Invalid input. Please try again.." << std::endl;
-		success = getMenuOption(menuOption);
+		username = readInputFromFile(SERVER_INFO, 2);
+		registration_success = _clientLogic.registerClient(username);
+		
+		if (!registration_success)
+			return false;
+		else
+			_registered = registration_success;
+
+		publicKey_registration = _clientLogic.registerPublicKey();
+	}
+	else
+	{
+		username = readInputFromFile(CLIENT_INFO, 1);
+		success = _clientLogic.reconnectClient(username);
+		if (!success)
+			return false;
 	}
 
-	clear();
-	std::cout << std::endl;
-	if (!_registered && menuOption.requireRegistration())
-	{
-		std::cout << "You must register first!" << std::endl;
-		return;
-	}
+	_clientLogic.sendFile();
+
+
 
 	// Main selection switch
 	switch (menuOption.getValue())

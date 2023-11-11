@@ -30,8 +30,8 @@ public:
 		std::string   username;
 		SPublicKey    publicKey;
 		bool          publicKeySet    = false;
-		SSymmetricKey symmetricKey;
-		bool          symmetricKeySet = false;
+		SSymmetricKey aes_symmetricKey;
+		bool          aes_symmetricKeySet = false;
 	};
 
 	struct SMessage
@@ -69,10 +69,11 @@ public:
 	bool parseServeInfo();
 	bool parseClientInfo();
     bool parseNetworkInfo(std::string info);
-    std::string readInputFromFile(const std::string filename);
+	std::string readInputFromFile(const std::string filename, int lineNumber);
 	std::vector<std::string> getUsernames() const;
 	bool registerClient(const std::string& username);
-	bool registerPublicKey(const std::string& username);
+	bool reconnectClient(const std::string& username);
+	bool registerPublicKey();
 	bool requestClientsList();
 	bool requestClientPublicKey(const std::string& username);
 	bool requestPendingMessages(std::vector<SMessage>& messages);

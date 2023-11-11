@@ -1,16 +1,13 @@
-#include "CClientMenu.h"
+#include "CClientEngine.h"
 
 int main(int argc, char* argv[])
 {
-	CClientMenu menu;
-	menu.initialize();
+	CClientEngine engine;
+	engine.initialize();
 	
-	for (;;)
-	{
-		menu.display();
-		menu.handleUserChoice();
-		menu.pause();
-	}
+	engine.display();
+	engine.startFlow();
+	engine.pause();
 	
 	return 0;
 }
