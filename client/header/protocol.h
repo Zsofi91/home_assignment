@@ -35,8 +35,11 @@ enum ERequestCode
 	REQUEST_PUBLIC_KEY_REGISTRATION = 1026,
 	REQUEST_CLIENTS_LIST = 1001,   // payload invalid. payloadSize = 0.
 	REQUEST_PUBLIC_KEY = 1002,
+	REQUEST_INVALID_CRC = 1030,
 	REQUEST_SEND_FILE = 1028,
-	REQUEST_PENDING_MSG = 1004    // payload invalid. payloadSize = 0.
+	REQUEST_PENDING_MSG = 1004, // payload invalid. payloadSize = 0.
+	REQUEST_VALID_CRC = 1029,
+	REQUEST_NACK_CRC = 1031
 };
 
 enum EResponseCode
@@ -45,14 +48,17 @@ enum EResponseCode
 	RESPONSE_PUBLIC_KEY_REGISTRATION = 2102,
 	RESPONSE_USERS = 2001,
 	RESPONSE_PUBLIC_KEY = 2002,
-	RESPONSE_MSG_SENT = 2003,
+	RESPONSE_FILE_SENT = 2103,
 	RESPONSE_PENDING_MSG = 2004,
-	RESPONSE_ERROR = 2107    // payload invalid. payloadSize = 0.
+	RESPONSE_ACK = 2104
 };
 
 enum EResponseErrorCodes
 {
-	REGISTRATION_RESPONSE_ERROR = 2101	
+	REGISTRATION_RESPONSE_ERROR = 2101,
+	RE_REGISTRATION_RESPONSE_ERROR = 2106,
+	RESPONSE_ERROR = 2107    // payload invalid. payloadSize = 0.
+
 };
 
 enum EMessageType
@@ -87,6 +93,12 @@ struct SClientName
 {
 	uint8_t name[CLIENT_NAME_SIZE];  // DEF_VAL terminated.
 	SClientName() : name{ '\0' } {}
+};
+
+struct SFileName
+{
+	uint8_t name[FILE_NAME_SIZE];  // DEF_VAL terminated.
+	SFileName() : name{ '\0' } {}
 };
 
 struct SPublicKey
@@ -135,6 +147,42 @@ struct SResponseRegistration
 	SClientID       payload;
 };
 
+struct SRequestAbortCommunication
+{
+	SRequestHeader header;
+	struct
+	{
+		SFileName filename;
+	}payload;
+	SRequestAbortCommunication() : header(REQUEST_NACK_CRC) {}
+};
+
+struct SRequestInvalidCRC
+{
+	SRequestHeader header;
+	struct
+	{
+		SFileName filename;
+	}payload;
+	SRequestInvalidCRC() : header(REQUEST_INVALID_CRC) {}
+};
+
+struct SRequestValidCRC
+{
+	SRequestHeader header;
+	struct
+	{
+		SFileName filename;
+	}payload;
+	SRequestValidCRC() : header(REQUEST_VALID_CRC) {}
+};
+
+struct SResponseGeneric
+{
+	SResponseHeader header(RESPONSE_ACK);
+	SClientID       payload;
+};
+
 struct SRequestPublicKeyRegistration
 {
 	SRequestHeader header;
@@ -165,7 +213,6 @@ struct SRequestReconnection
 	}payload;
 	SRequestRegistration() : header(REQUEST_REGISTRATION) {}
 };
-
 
 struct SRequestClientsList
 {
@@ -201,21 +248,26 @@ struct SRequestSendFile
 	SRequestHeader header;
 	struct SPayloadHeader
 	{
-		std::string			fileName;
+		SClientID   clientId;
+		SFileName			fileName;
 		csize_t             contentSize;
-		SPayloadHeader() : fileName(filename), contentSize(DEF_VAL) {}
+		SPayloadHeader() : contentSize(DEF_VAL) {}
 	}payloadHeader;
-	SRequestSendFile(const std::string filename) : header(id, REQUEST_SEND_FILE), payloadHeader(filename) {}
+
+	SRequestSendFile(SClientID id) : header(id, REQUEST_SEND_FILE), payloadHeader() {}
 };
 
-struct SResponseMessageSent
+struct SResponseFileSent
 {
 	SResponseHeader header;
-	struct SPayload
+	struct SPayloadHeader
 	{
-		SClientID   clientId;   // destination client
-		messageID_t messageId;
-		SPayload() : messageId(DEF_VAL) {}
+		SFileName			fileName;
+		csize_t             contentSize;
+		SPayloadHeader() : contentSize(DEF_VAL) {}
+	}payloadHeader;
+	struct {
+		size_t checksum;
 	}payload;
 };
 

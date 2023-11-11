@@ -1,11 +1,3 @@
-/**
- * MessageU Client
- * @file CFileHandler.h
- * @brief Handle files on filesystem.
- * @author Roman Koifman
- * https://github.com/Romansko/MessageU/blob/main/client/header/CFileHandler.h
- */
-
 #pragma once
 #include <string>
 #include <fstream>

@@ -29,7 +29,6 @@ public:
 		SClientID     id;
 		std::string   username;
 		SPublicKey    publicKey;
-		SSymmetricKey aes_symmetricKey;
 		bool          publicKeySet    = false;
 		SSymmetricKey symmetricKey;
 		bool          symmetricKeySet = false;
@@ -44,9 +43,13 @@ public:
 	struct SFile
 	{
 		std::string username; // source username
-		std::string content;
+		size_t bytes;
+		uint8_t* filecontent;
 		std::string filePath;
 		std::string fileName;
+		size_t retryAttempts = 0;
+		size_t checksum;
+		bool shouldResend = false;
 	};
 
 public:
@@ -75,6 +78,9 @@ public:
 	bool requestPendingMessages(std::vector<SMessage>& messages);
 	bool sendMessage(const std::string& username, const EMessageType type, const std::string& data = "");
 	bool sendFile();
+	bool resendFile();
+	bool ack_CRC_valid();
+	bool nack_CRC_valid()
 
 private:
 	void clearLastError();

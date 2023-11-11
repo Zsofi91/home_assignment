@@ -12,6 +12,7 @@
 #include "AESWrapper.h"
 #include "CFileHandler.h"
 #include "CSocketHandler.h"
+#include "Checksum.h"
 
 std::ostream& operator<<(std::ostream& os, const EMessageType& type)
 {
@@ -81,6 +82,13 @@ bool CClientLogic::parseServeInfo()
 	{
 		clearLastError();
 		_lastError << "Invalid filename from " << SERVER_INFO;
+		return false;
+	}
+	_fileHandler->close();
+	if (! _fileHandler->readAtOnce(filePath, _fileToBeSent.filecontent, _fileToBeSent.bytes))
+	{
+		clearLastError();
+		_lastError << "Could not open file " << filePath;
 		return false;
 	}
 	_fileToBeSent.filePath = filePath;
@@ -252,7 +260,7 @@ bool CClientLogic::validateHeader(const SResponseHeader& header, const EResponse
 		if (error == header.code)
 		{
 			clearLastError();
-			_lastError << "Error response code (" << REGISTRATION_RESPONSE_ERROR << ") received.";
+			_lastError << "Error response code (" << error << ") received.";
 			return false;
 		}
 	}
@@ -282,7 +290,7 @@ bool CClientLogic::validateHeader(const SResponseHeader& header, const EResponse
 		expectedSize = sizeof(SResponsePublicKey) - sizeof(SResponseHeader);
 		break;
 	}
-	case RESPONSE_MSG_SENT:
+	case RESPONSE_FILE_SENT:
 	{
 		expectedSize = sizeof(SResponseMessageSent) - sizeof(SResponseHeader);
 		break;
@@ -550,8 +558,6 @@ bool CClientLogic::registerPublicKey(const std::string& username)
 {
 	if (_fileHandler->open(CLIENT_INFO))
 	{
-		// need to create data structures for request and response
-		// send to server and get AES key
 		SRequestReconnection request;
 		SResponsePublicKeyRegistration response;
 
@@ -568,7 +574,7 @@ bool CClientLogic::registerPublicKey(const std::string& username)
 			return false;  // error message updated within.
 		// store the AES key
 
-		_self.aes_symmetricKey = response.payload.aes_symmetricKey
+		_self.symmetricKey = response.payload.aes_symmetricKey
 	}
 	else 
 	{
@@ -613,15 +619,15 @@ bool CClientLogic::registerPublicKey(const std::string& username)
 			return false;  // error message updated within.
 
 		// store the AES key
-		_self.aes_symmetricKey = response.payload.aes_symmetricKey
+		_self.symmetricKey = response.payload.aes_symmetricKey
 	}
 
 }
 
 bool CClientLogic::sendFile()
 {
-	SRequestSendFile  request(_self.id, (_fileToBeSent.fileName));
-	SResponseMessageSent response;
+	SRequestSendFile  request(_self.id);
+	SResponseFileSent response;
 	uint8_t* content = nullptr;
 	std::map<const EMessageType, const std::string> descriptions = {
 		{MSG_SYMMETRIC_KEY_REQUEST, "symmetric key request"},
@@ -629,67 +635,28 @@ bool CClientLogic::sendFile()
 		{MSG_TEXT,                  "text message"},
 		{MSG_FILE,                  "file"}
 	};
-
-	request.payloadHeader.clientId = client.id;
 	
-
-	/*if (type == MSG_SYMMETRIC_KEY_SEND)
-	{
-		if (!client.publicKeySet)
-		{
-			clearLastError();
-			_lastError << "Couldn't find " << client.username << "'s public key.";
-			return false;
-		}
-
-		AESWrapper    aes;
-		SSymmetricKey symKey;
-		symKey = aes.getKey();
-		if (!setClientSymmetricKey(request.payloadHeader.clientId, symKey))
-		{
-			clearLastError();
-			_lastError << "Failed storing symmetric key of clientID "
-				<< CStringer::hex(request.payloadHeader.clientId.uuid, sizeof(request.payloadHeader.clientId.uuid))
-				<< ". Please try to request clients list again..";
-			return false;
-		}
-
-		RSAPublicWrapper rsa(client.publicKey);
-		const std::string encryptedKey = rsa.encrypt(symKey.symmetricKey, sizeof(symKey.symmetricKey));
-		request.payloadHeader.contentSize = encryptedKey.size();  // 128
-		content = new uint8_t[request.payloadHeader.contentSize];
-		memcpy(content, encryptedKey.c_str(), request.payloadHeader.contentSize);
-	}
-	*/
 	// Common Logic for MSG_TEXT, MSG_FILE
-	if (data.empty())
+	if (_fileToBeSent.bytes == 0)
 	{
 		clearLastError();
 		_lastError << "Empty input was provided!";
 		return false;
 	}
-	if (!client.symmetricKeySet)
+	if (!_self.symmetricKey)
 	{
 		clearLastError();
 		_lastError << "Couldn't find " << client.username << "'s symmetric key.";
 		return false;
 	}
 
-	uint8_t* file = nullptr;
-	size_t bytes;
-	if ((type == MSG_FILE) && !_fileHandler->readAtOnce(data, file, bytes))  // data = filename
-	{
-		clearLastError();
-		_lastError << "file not found";
-		return false;
-	}
-	AESWrapper aes(client.symmetricKey);
-	const std::string encrypted = (type == MSG_TEXT) ? aes.encrypt(data) : aes.encrypt(file, bytes);
+	strcpy_s(reinterpret_cast<char*>(request.payloadHeader.fileName.name), CLIENT_NAME_SIZE, _fileToBeSent.fileName.c_str());
+	_fileToBeSent.checksum = checksumFromFile(_fileToBeSent.filePath);
+	AESWrapper aes(_self.symmetricKey);
+	const std::string encrypted = aes.encrypt(_fileToBeSent.filecontent, _fileToBeSent.bytes);
 	request.payloadHeader.contentSize = encrypted.size();
 	content = new uint8_t[request.payloadHeader.contentSize];
 	memcpy(content, encrypted.c_str(), request.payloadHeader.contentSize);
-	delete[] file;
-
 
 	// prepare message to send
 	size_t msgSize;
@@ -720,23 +687,85 @@ bool CClientLogic::sendFile()
 	}
 
 	delete[] content;
-	if (msgToSend != reinterpret_cast<uint8_t*>(&request))  // check if msgToSend was allocated by current code.
-		delete[] msgToSend;
+	/*if (msgToSend != reinterpret_cast<uint8_t*>(&request))  // check if msgToSend was allocated by current code.
+		delete[] msgToSend;*/
 
 	// Validate SResponseMessageSent header
-	if (!validateHeader(response.header, RESPONSE_MSG_SENT))
+	if (!validateHeader(response.header, RESPONSE_FILE_SENT))
 		return false;  // error message updated within.
-
-	// Validate destination clientID
-	if (request.payloadHeader.clientId != response.payload.clientId)
-	{
-		clearLastError();
-		_lastError << "Unexpected clientID was received.";
-		return false;
-	}
+	++_fileToBeSent.retryAttempts;
+	_fileToBeSent.shouldResend = ! (_fileToBeSent.checksum == response.payload.checksum);
 
 	return true;
 }
+
+bool CClientLogic::resendFile()
+{
+	// send 1030
+	SRequestInvalidCRC request;
+	SResponseGeneric response;
+
+	request.header.payloadSize = sizeof(request.payload);
+	strcpy_s(reinterpret_cast<char*>(request.payloadHeader.fileName.name), FILE_NAME_SIZE, _fileToBeSent.fileName.c_str());
+
+	if (!_socketHandler->sendReceive(reinterpret_cast<const uint8_t* const>(&request), sizeof(request),
+		reinterpret_cast<uint8_t* const>(&response), sizeof(response)))
+	{
+		clearLastError();
+		_lastError << "Failed communicating with server on " << _socketHandler;
+		return false;
+	}
+
+	if (!validateHeader(response.header, RESPONSE_ACK))
+		return false;  // error message updated within.
+
+	// send 1028
+	this->sendFile();
+	return true;
+}
+
+bool CClientLogic::ack_CRC_valid()
+{
+	SRequestInvalidCRC request;
+	SResponseGeneric response;
+
+	request.header.payloadSize = sizeof(request.payload);
+	strcpy_s(reinterpret_cast<char*>(request.payloadHeader.fileName.name), FILE_NAME_SIZE, _fileToBeSent.fileName.c_str());
+
+	if (!_socketHandler->sendReceive(reinterpret_cast<const uint8_t* const>(&request), sizeof(request),
+		reinterpret_cast<uint8_t* const>(&response), sizeof(response)))
+	{
+		clearLastError();
+		_lastError << "Failed communicating with server on " << _socketHandler;
+		return false;
+	}
+
+	if (!validateHeader(response.header, RESPONSE_ACK))
+		return false;  // error message updated within.
+	return true;
+}
+
+bool CClientLogic::nack_CRC_valid()
+{
+	SRequestAbortCommunication request;
+	SResponseGeneric response;
+
+	request.header.payloadSize = sizeof(request.payload);
+	strcpy_s(reinterpret_cast<char*>(request.payloadHeader.fileName.name), FILE_NAME_SIZE, _fileToBeSent.fileName.c_str());
+
+	if (!_socketHandler->sendReceive(reinterpret_cast<const uint8_t* const>(&request), sizeof(request),
+		reinterpret_cast<uint8_t* const>(&response), sizeof(response)))
+	{
+		clearLastError();
+		_lastError << "Failed communicating with server on " << _socketHandler;
+		return false;
+	}
+
+	if (!validateHeader(response.header, RESPONSE_ACK))
+		return false;  // error message updated within.
+	return true;
+}
+
 
 /**
  * Invoke logic: request client list from server.
