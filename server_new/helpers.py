@@ -2,7 +2,7 @@ import hashlib
 import secrets
 
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 import io
 
@@ -33,9 +33,23 @@ def generate_aes_key():
     return key
 
 
-def encrypt_aes_key(aes_key, public_key):
-    encrypted_aes_key = public_key.encrypt(aes_key, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                                                                 algorithm=hashes.SHA256(), label=None))
+def encrypt_aes_key(aes_key, public_key_str):
+    # Load the public key from a string
+    public_key = serialization.load_pem_public_key(
+        public_key_str.encode(),
+        backend=default_backend()
+    )
+
+    # Encrypt the AES key with the public key
+    encrypted_aes_key = public_key.encrypt(
+        aes_key,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+
     return encrypted_aes_key
 
 
