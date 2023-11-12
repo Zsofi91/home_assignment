@@ -46,22 +46,6 @@ def decrypt_file_content(encrypted_content, aes_key):
     return decrypted_content
 
 
-def cksum(file_name):
-    crc32 = 0
-    byte_count = 0
-
-    with open(file_name, 'rb') as file:
-        while True:
-            chunk = file.read(1024)
-            if not chunk:
-                break
-            crc32 = hashlib.crc32(chunk, crc32)
-            byte_count += len(chunk)
-
-    crc32 = crc32 & 0xFFFFFFFF
-    return f'{crc32:08X} {byte_count} {file_name}'
-
-
 def save_to_ram(file_content, file_name):
     in_memory_file = io.BytesIO(file_content)
     file_path = f'/tmp/{file_name}'

@@ -229,3 +229,21 @@ class CRCResponse:
             return data
         except:
             return b""
+
+
+class InvalidCRCRequest:
+    def __init__(self):
+        self.header = RequestHeader()
+        self.file_name = b""
+
+    def unpack(self, data):
+        if not self.header.unpack(data):
+            return False
+        try:
+            file_name_data = data[self.header.size:self.header.size + config.file_name_size]
+            self.file_name = str(struct.unpack(f"<{config.file_name_size}s", file_name_data)[0].partition(b'\0')[0].
+                                 decode('utf-8'))
+            return True
+        except:
+            self.file_name = b""
+            return False

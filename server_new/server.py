@@ -263,21 +263,20 @@ class Server:
         response.header.payload_size = config.client_id_size
         return self.write(conn, response.pack())
 
-    def invalid_crc_resending_last_time(self, conn, data):
+    def invalid_crc_resending_request(self, conn, data):
         """ Receive invalid crc request for the 4th time. """
-        request = protocol.ValidCRCRequest()
+        request = protocol.InvalidCRCRequest()
         response = protocol.CRCResponse()
         if not request.unpack(data):
-            logging.error("Valid CRC Request: Failed parsing request.")
+            logging.error("Invalid CRC Request: Failed parsing request.")
             return False
-        # update LastSeen and verified CRC columns for client
+        # update LastSeen column for client
         now = datetime.now()
         try:
             self.database.update_last_seen(request.header.clientID, now)
-            self.database.update_verified_true(request.header.clientID)
-            logging.info(f"Valid CRC Request: updated LastSeen and Verified to True for client.")
+            logging.info(f"Invalid CRC Request: updated LastSeen for client.")
         except:
-            logging.error(f"Valid CRC Request: Failed to update db for client.")
+            logging.error(f"Invalid CRC Request: Failed to update db for client.")
         response.clientID = request.header.clientID
         response.header.payload_size = config.client_id_size
         return self.write(conn, response.pack())
