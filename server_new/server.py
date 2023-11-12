@@ -164,7 +164,7 @@ class Server:
         encrypted_aes_key = helpers.encrypt_aes_key(aes_key, request.public_key)
         response.clientID = request.header.clientID
         response.aes_key = encrypted_aes_key
-        response.header.payload_size = config.client_id_size
+        response.header.payload_size = config.client_id_size + config.aes_key_size
         return self.write(conn, response.pack())
 
     def handle_reconnection_request(self, conn, data):
