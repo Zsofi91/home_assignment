@@ -76,17 +76,16 @@ public:
 	bool registerPublicKey();
 	bool requestClientsList();
 	bool requestClientPublicKey(const std::string& username);
-	bool requestPendingMessages(std::vector<SMessage>& messages);
-	bool sendMessage(const std::string& username, const EMessageType type, const std::string& data = "");
 	bool sendFile();
+	bool retry();
 	bool resendFile();
 	bool ack_CRC_valid();
-	bool nack_CRC_valid()
+	bool nack_CRC_valid();
 
 private:
 	void clearLastError();
 	bool storeClientInfo();
-	bool storeRSAInfo(std::string& public_key, std::string& private_key);
+	bool storeRSAInfo(std::string& private_key);
 	bool validateHeader(const SResponseHeader& header, const EResponseCode expectedCode);
 	bool validateFileName(std::string& fileName);
 	bool receiveUnknownPayload(const uint8_t* const request, const size_t reqSize, const EResponseCode expectedCode, uint8_t*& payload, size_t& size);
@@ -94,6 +93,8 @@ private:
 	bool setClientSymmetricKey(const SClientID& clientID, const SSymmetricKey& symmetricKey);
 	bool getClient(const std::string& username, SClient& client) const;
 	bool getClient(const SClientID& clientID, SClient& client) const;
+	void getPrivateKeyfromKeyFile(const std::string filepath, std::string& privKey);
+
 
 	SClient              _self;           // self symmetric key invalid.
 	SFile				_fileToBeSent;

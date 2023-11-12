@@ -41,6 +41,7 @@ void CClientEngine::display() const
 void CClientEngine::startFlow()
 {
 	const std::string username;
+	bool success;
 	if (!_registered)
 	{
 		username = readInputFromFile(SERVER_INFO, 2);
@@ -61,116 +62,12 @@ void CClientEngine::startFlow()
 			return false;
 	}
 
-	_clientLogic.sendFile();
-
-
-
-	// Main selection switch
-	switch (menuOption.getValue())
+	if (_clientLogic.sendFile())
 	{
-	case CMenuOption::EOption::MENU_EXIT:
-	{
-		std::cout << "Client will now exit." << std::endl;
-		pause();
-		exit(0);
-	}
-	case CMenuOption::EOption::MENU_REGISTER:
-	{
-		if (_registered)
-		{
-			std::cout << _clientLogic.getSelfUsername() << ", you have already registered!" << std::endl;
-			return;
-		}
-        const std::string username;
-        try
-        {
-            username = readInputFromFile(CLIENT_INFO, 1);
-        }
-        catch (const std::exception& e)
-        {
-            username = readInputFromFile(SERVER_INFO, 2);
-        }
-		success = _clientLogic.registerClient(username);
-		_registered = success;
-		break;
-	}
-	case CMenuOption::EOption::MENU_REGISTER_PUBLIC_KEY:
-	{
-		username = readInputFromFile(CLIENT_INFO, 1);
-		success = _clientLogic.registerPublicKey(username);
-	}
-	case CMenuOption::EOption::MENU_REQ_CLIENT_LIST:
-	{
-		success = _clientLogic.requestClientsList();
+		success = _clientLogic.retry();
 		if (success)
-		{
-			// Copy usernames into vector & sort them alphabetically.
-			std::vector<std::string> usernames = _clientLogic.getUsernames();
-			if (usernames.empty())
-			{
-				std::cout << "Server has no users registered." << std::endl;
-				return;
-			}
-			std::cout << "Registered users:" << std::endl;
-			for (const auto& username : usernames )
-			{
-				std::cout << username << std::endl;
-			}
-		}
-		break;
+			_clientLogic.ack_CRC_valid();
+		else
+			_clientLogic.nack_CRC_valid();
 	}
-	case CMenuOption::EOption::MENU_REQ_PUBLIC_KEY:
-	{
-		const std::string username = readUserInput("Please type a username..");
-		success = _clientLogic.requestClientPublicKey(username);
-		break;
-	}
-	case CMenuOption::EOption::MENU_REQ_PENDING_MSG:
-	{
-		std::vector<CClientLogic::SMessage> messages;
-		success = _clientLogic.requestPendingMessages(messages);
-		if (success)
-		{
-			std::cout << std::endl;
-			for (const auto& msg : messages)
-			{
-				std::cout << "From: " << msg.username << std::endl << "Content:" << std::endl << msg.content << std::endl << std::endl;
-			}
-			const std::string lastErr = _clientLogic.getLastError();  // contains a string of errors occurred during messages parsing.
-			if (!lastErr.empty())
-			{
-				std::cout << std::endl << "MESSAGES ERROR LOG: " << std::endl << lastErr;
-			}
-		}
-		break;
-	}
-	case CMenuOption::EOption::MENU_SEND_MSG:
-	{
-		const std::string username = readUserInput("Please type a username to send message to..");
-		const std::string message  = readUserInput("Enter message: ");
-		success = _clientLogic.sendMessage(username, MSG_TEXT, message);
-		break;
-	}
-	case CMenuOption::EOption::MENU_REQ_SYM_KEY:
-	{
-		const std::string username = readUserInput("Please type a username to request symmetric key from..");
-		success = _clientLogic.sendMessage(username, MSG_SYMMETRIC_KEY_REQUEST);
-		break;
-	}
-	case CMenuOption::EOption::MENU_SEND_SYM_KEY:
-	{
-		const std::string username = readUserInput("Please type a username to send symmetric key to..");
-		success = _clientLogic.sendMessage(username, MSG_SYMMETRIC_KEY_SEND);
-		break;
-	}
-	case CMenuOption::EOption::MENU_SEND_FILE:
-	{
-		const std::string username = readUserInput("Please type a username to send file to..");
-		const std::string message  = readUserInput("Enter filepath: ");
-		success = _clientLogic.sendMessage(username, MSG_FILE, message);
-		break;
-	}
-	}
-
-	std::cout << (success ? menuOption.getSuccessString() : _clientLogic.getLastError()) << std::endl;
 }

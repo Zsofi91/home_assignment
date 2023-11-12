@@ -12,7 +12,6 @@ public:
 	void startFlow();
 
 	void clear() const { system("cls"); }     // clear menu
-	void pause() const { system("pause"); }   // pause menu
 
 private:
 	CClientLogic                   _clientLogic;

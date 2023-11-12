@@ -92,7 +92,7 @@ bool CClientLogic::parseServeInfo()
 		return false;
 	}
 	_fileToBeSent.filePath = filePath;
-	_fileHandler->close();
+	//_fileHandler->close();
 	return true;
 }
 
@@ -497,7 +497,6 @@ bool CClientLogic::registerClient(const std::string& username)
 	// fill request data
 	request.header.payloadSize = sizeof(request.payload);
 	strcpy_s(reinterpret_cast<char*>(request.payload.Name.name), CLIENT_NAME_SIZE, username.c_str());
-	//memcpy(request.payload.clientPublicKey.publicKey, publicKey.c_str(), sizeof(request.payload.clientPublicKey.publicKey));
 
 	if (!_socketHandler->sendReceive(reinterpret_cast<const uint8_t* const>(&request), sizeof(request),
 		reinterpret_cast<uint8_t* const>(&response), sizeof(response)))
@@ -514,7 +513,7 @@ bool CClientLogic::registerClient(const std::string& username)
 	// store received client's ID
 	_self.id = response.payload;
 	_self.username = username;
-	//_self.publicKey = request.payload.clientPublicKey;
+
 	if (!storeClientInfo())
 	{
 		clearLastError();
@@ -543,30 +542,34 @@ bool CClientLogic::reconnectClient(const std::string& username)
 		return false;  // error message updated within.
 
 	// store the decrypted AES key using the priv.key file
-	_self.aes_symmetricKey = response.payload.aes_symmetricKey;
+	std::string privateKey;
+	getPrivateKeyfromKeyFile(PRIVATE_KEY_INFO, privateKey);
+	try
+	{
+		delete _rsaDecryptor;
+		_rsaDecryptor = new RSAPrivateWrapper(decodedKey);
+	}
+	catch (...)
+	{
+		clearLastError();
+		_lastError << "Couldn't parse private key from " << CLIENT_INFO;
+		return false;
+	}
+	_self.id = response.payload.clientId;
+	_self.aes_symmetricKey = _rsaDecryptor->decrypt(response.payload.aes_symmetricKey, sizeof(response.payload.aes_symmetricKey));
 	_self.aes_symmetricKeySet = true;
 	return true;
 
 }
-bool CClientLogic::storeRSAInfo(const std::string& public_key, const std::string& private_key)
+bool CClientLogic::storeRSAInfo(const std::string& private_key)
 {
-	if (!_fileHandler->open(PRIVATE_KEY_INFO))
+	if (!_fileHandler->writeAtOnce(PRIVATE_KEY_INFO, private_key))
 	{
-		std::cout << PRIVATE_KEY_INFO << " does not exist, creating..." << endl;
-		_fileHandler->close();
-		if (!_fileHandler->open(PRIVATE_KEY_INFO, true))
-		{
-			if (!_fileHandler->write(reinterpret_cast<const uint8_t*>(private_key.c_str()), private_key.size()))
-			{
-				clearLastError();
-				_lastError << "Couldn't write client's private key to " << PRIVATE_KEY_INFO;
-				return false;
-			}
-			return true;
-		}
+		clearLastError();
+		_lastError << "Couldn't write client's private key to " << PRIVATE_KEY_INFO;
+		return false;
 	}
-	_fileHandler->close();
-	return false;
+	return true;
 }
 bool CClientLogic::registerPublicKey()
 {
@@ -583,20 +586,25 @@ bool CClientLogic::registerPublicKey()
 		return false;
 	}
 	const auto privateKey = _rsaDecryptor->getPrivateKey();
-	if (storeRSAInfo) // If you had to create a new file, write the encrypted key to me.info
+	if (storeRSAInfo(privateKey)) // If you had to create a new file, write the encrypted key to me.info
 	{
 		// Write Base64 encoded private key
 		const auto encodedKey = CStringer::encodeBase64(_rsaDecryptor->getPrivateKey());
-		readInputFromFile(CLIENT_INFO, 2);
-		if (!_fileHandler->write(reinterpret_cast<const uint8_t*>(encodedKey.c_str()), encodedKey.size()))
+		std::string temp;
+		if (!_fileHandler->readAtOnce(CLIENT_INFO, temp, CLIENT_NAME_SIZE + CLIENT_ID_SIZE))
+		{
+			clearLastError();
+			_lastError << "Could not open file " << CLIENT_INFO;
+			return false;
+		}
+		temp.append(encodedKey);
+		if (!_fileHandler->writeAtOnce(CLIENT_INFO, temp))
 		{
 			clearLastError();
 			_lastError << "Couldn't write client's private key to " << CLIENT_INFO;
 			return false;
 		}
-		_fileHandler->close();
 	}
-
 	request.header.payloadSize = sizeof(request.payload);
 	memcpy(request.payload.clientPublicKey.publicKey, publicKey.c_str(), sizeof(request.payload.clientPublicKey.publicKey));
 	strcpy_s(reinterpret_cast<char*>(request.payload.Name.name), CLIENT_NAME_SIZE, username.c_str());
@@ -680,7 +688,6 @@ bool CClientLogic::sendFile()
 
 	++_fileToBeSent.retryAttempts;
 	_fileToBeSent.shouldResend = ! (_fileToBeSent.checksum == response.payload.checksum);
-
 	return true;
 }
 
@@ -711,7 +718,7 @@ bool CClientLogic::resendFile()
 
 bool CClientLogic::ack_CRC_valid()
 {
-	SRequestInvalidCRC request;
+	SRequestValidCRC request;
 	SResponseGeneric response;
 
 	request.header.payloadSize = sizeof(request.payload);
@@ -868,4 +875,35 @@ std::string CClientLogic::readInputFromFile(const std::string filename, int line
 		!_fileHandler->readLine(username);
 	}
 	return username;
+}
+
+void CClientLogic::getPrivateKeyfromKeyFile(const std::string filepath, std::string& privKey)
+{
+	if (!_fileHandler->open(filepath))
+	{
+		clearLastError();
+		_lastError << "Couldn't open " << filepath;
+		return false;
+	}
+	while (_fileHandler->readLine(privKey))
+	{
+		clearLastError();
+		_lastError << "Couldn't read client's private key from " << filepath;
+		return false;
+	}
+	if (privKey.empty())
+	{
+		clearLastError();
+		_lastError << "Couldn't read client's private key from " << filepath;
+		return false;
+	}
+	_fileHandler->close();
+}
+
+bool CClientLogic::retry()
+{
+	while (_fileToBeSent.shouldResend && _fileToBeSent.retryAttempts <= MAX_RETRIES)
+		this->resendFile();
+
+	return !_fileToBeSent.shouldResend;
 }

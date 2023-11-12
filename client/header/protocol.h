@@ -28,6 +28,7 @@ constexpr size_t    SYMMETRIC_KEY_SIZE = 16;   // defined in protocol.  128 bits
 constexpr size_t    REQUEST_OPTIONS = 5;
 constexpr size_t    RESPONSE_OPTIONS = 6;
 constexpr size_t	FILE_NAME_SIZE = 255;
+constexpr size_t	MAX_RETRIES = 3;
 
 enum ERequestCode
 {

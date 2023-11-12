@@ -7,7 +7,6 @@ int main(int argc, char* argv[])
 	
 	engine.display();
 	engine.startFlow();
-	engine.pause();
 	
 	return 0;
 }
