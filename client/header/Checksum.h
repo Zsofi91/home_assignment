@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <string>
 
+#define UNSIGNED(n) (n & 0xffffffff)
 
 uint_fast32_t const crctab[8][256] = {
 {
@@ -444,8 +445,6 @@ uint_fast32_t const crctab[8][256] = {
   0x0d26bcfb, 0x8b82b73a, 0xd0236bf0, 0x3cc10eae, 0x6760d264
 },
 };
-
-#define UNSIGNED(n) (n & 0xffffffff)
 
 unsigned long memcrc(char* b, size_t n);
 

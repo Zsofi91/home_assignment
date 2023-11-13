@@ -11,7 +11,8 @@ public:
 	void display() const;
 	void startFlow();
 
-	void clear() const { system("cls"); }     // clear menu
+	void clear() const { system("cls"); }
+	void pause() const { system("pause"); }
 
 private:
 	CClientLogic                   _clientLogic;

@@ -216,6 +216,16 @@ bool CFileHandler::writeAtOnce(const std::string& filepath, const std::string& d
 	return success;
 }
 
+bool CFileHandler::writeAtOnce(const std::string& filepath, const uint8_t* const data)
+{
+	if (sizeof(data) || !open(filepath, true))
+		return false;
+
+	const bool success = write(data, sizeof(data));
+	close();
+	return success;
+}
+
 /**
  * Returns absolute path to %TMP% folder.
  */

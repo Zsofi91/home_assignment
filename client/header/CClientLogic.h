@@ -48,7 +48,7 @@ public:
 		std::string filePath;
 		std::string fileName;
 		size_t retryAttempts = 0;
-		size_t checksum;
+		std::string checksum;
 		bool shouldResend = false;
 	};
 
@@ -90,11 +90,8 @@ private:
 	bool validateFileName(std::string& fileName);
 	bool receiveUnknownPayload(const uint8_t* const request, const size_t reqSize, const EResponseCode expectedCode, uint8_t*& payload, size_t& size);
 	bool setClientPublicKey(const SClientID& clientID, const SPublicKey& publicKey);
-	bool setClientSymmetricKey(const SClientID& clientID, const SSymmetricKey& symmetricKey);
-	bool getClient(const std::string& username, SClient& client) const;
-	bool getClient(const SClientID& clientID, SClient& client) const;
 	void getPrivateKeyfromKeyFile(const std::string filepath, std::string& privKey);
-
+	bool compareCRC(size_t serverChecksum);
 
 	SClient              _self;           // self symmetric key invalid.
 	SFile				_fileToBeSent;

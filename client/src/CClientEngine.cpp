@@ -40,15 +40,14 @@ void CClientEngine::display() const
  */
 void CClientEngine::startFlow()
 {
-	const std::string username;
-	bool success;
+	std::string username;
+	bool success, registration_success, publicKey_registration;
 	if (!_registered)
 	{
-		username = readInputFromFile(SERVER_INFO, 2);
-		registration_success = _clientLogic.registerClient(username);
+		registration_success = _clientLogic.registerClient(_clientLogic.getSelfUsername());
 		
 		if (!registration_success)
-			return false;
+			return;
 		else
 			_registered = registration_success;
 
@@ -56,10 +55,19 @@ void CClientEngine::startFlow()
 	}
 	else
 	{
-		username = readInputFromFile(CLIENT_INFO, 1);
+		username = _clientLogic.readInputFromFile(CLIENT_INFO, 1);
 		success = _clientLogic.reconnectClient(username);
 		if (!success)
-			return false;
+		{
+			registration_success = _clientLogic.registerClient(username);
+
+			if (!registration_success)
+				return;
+			else
+				_registered = registration_success;
+
+			publicKey_registration = _clientLogic.registerPublicKey();
+		}
 	}
 
 	if (_clientLogic.sendFile())

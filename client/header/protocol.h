@@ -62,7 +62,6 @@ enum EResponseErrorCodes
 	REGISTRATION_RESPONSE_ERROR = 2101,
 	RE_REGISTRATION_RESPONSE_ERROR = 2106,
 	RESPONSE_ERROR = 2107    // payload invalid. payloadSize = 0.
-
 };
 
 enum EMessageType
@@ -214,7 +213,7 @@ struct SRequestPublicKeyRegistration
 		SClientName Name;
 		SPublicKey  clientPublicKey;
 	}payload;
-	SRequestRegistration() : header(REQUEST_PUBLIC_KEY_REGISTRATION) {}
+	SRequestPublicKeyRegistration() : header(REQUEST_PUBLIC_KEY_REGISTRATION) {}
 };
 
 struct SResponsePublicKeyRegistration
@@ -234,7 +233,7 @@ struct SRequestReconnection
 	{
 		SClientName Name;
 	}payload;
-	SRequestRegistration() : header(REQUEST_REGISTRATION) {}
+	SRequestReconnection() : header(REQUEST_REGISTRATION) {}
 };
 
 struct SRequestClientsList

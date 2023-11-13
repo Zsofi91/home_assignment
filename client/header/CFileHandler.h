@@ -26,6 +26,7 @@ public:
 
     bool readAtOnce(const std::string& filepath, uint8_t*& file, size_t& bytes);
     bool writeAtOnce(const std::string& filepath, const std::string& data);
+    bool writeAtOnce(const std::string& filepath, const uint8_t* const data);
 
 	// Special folders
     std::string getTempFolder() const;

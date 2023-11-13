@@ -20,7 +20,8 @@ unsigned long memcrc(char * b, size_t n) {
 }
 
 std::string checksumFromFile(std::string fname) {
-    if (std::filesystem::exists(fname)) {
+    if (std::filesystem::exists(fname)) 
+    {
         std::filesystem::path fpath = fname;
         std::ifstream f1(fname.c_str(), std::ios::binary);
         
@@ -29,7 +30,7 @@ std::string checksumFromFile(std::string fname) {
         f1.seekg(0, std::ios::beg);
         f1.read(b, size);
         std::cout << "tellg returns" << f1.tellg() << std::endl;
-        f1.close()
+        f1.close();
         return std::to_string(memcrc(b, size)) + '\t' + std::to_string(size) + '\t' + fname;
     }
     else {

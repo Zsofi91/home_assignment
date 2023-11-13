@@ -16,7 +16,7 @@
 void AESWrapper::GenerateKey(uint8_t* const buffer, const size_t length)
 {
 	for (size_t i = 0; i < length; i += sizeof(size_t))
-		_rdrand32_step(reinterpret_cast<size_t*>(&buffer[i]));
+		_rdrand32_step(reinterpret_cast<unsigned int*>(&buffer[i]));
 }
 
 AESWrapper::AESWrapper()
