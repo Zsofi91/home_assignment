@@ -10,7 +10,7 @@ class Config:
         self.name_size = 255
         self.public_key_size = 160
         self.content_size = 4
-        self.aes_key_size = 128
+        self.aes_key_size = 16
         self.file_name_size = 255
         self.path_name_size = 255
         self.cksum_size = 4
